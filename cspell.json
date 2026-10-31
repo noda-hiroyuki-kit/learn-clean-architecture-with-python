@@ -1,0 +1,20 @@
+{
+    "version": "0.2",
+    "language": "en",
+    "dictionaries": [
+        "python",
+        "powershell"
+    ],
+    "ignorePaths": [
+        "**/*.svg",
+        "uv.lock"
+    ],
+    "words": [
+        "EDITMSG",
+        "Hiroyuki",
+        "Noda",
+        "pinact",
+        "prek",
+        "zizmor"
+    ]
+}

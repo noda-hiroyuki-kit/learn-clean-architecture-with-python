@@ -1,0 +1,28 @@
+# Configuration file for `prek`, a git hook framework written in Rust.
+# See https://prek.j178.dev for more information.
+#:schema https://www.schemastore.org/prek.json
+
+default_install_hook_types= ["pre-commit", "commit-msg"]
+default_stages= ["pre-commit", "manual"]
+
+[[repos]]
+repo = "https://github.com/streetsidesoftware/cspell-cli"
+rev = "v10.4.0"
+
+[[repos.hooks]]
+id = "cspell"
+name = "Spell check changed files"
+
+[[repos.hooks]]
+id = "cspell"
+name = "check commit message spelling"
+args = ["--no-must-find-files", "--no-progress", "--no-summary"]
+stages = ["commit-msg"]
+
+[[repos]]
+repo = "builtin"
+hooks = [
+    { id = "trailing-whitespace" },
+    { id = "end-of-file-fixer" },
+    { id = "check-added-large-files" },
+]
