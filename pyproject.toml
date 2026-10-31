@@ -3,3 +3,14 @@ name = "learn-clean-architecture-with-python"
 version = "0.1.0"
 requires-python = ">=3.15"
 dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
+    "pytest-randomly>=5.0.0",
+    "ruff>=0.17.3",
+    "tox>=4.67.5",
+    "tox-uv>=1.37.2",
+    "ty>=0.0.95",
+]
