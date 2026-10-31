@@ -22,7 +22,8 @@ stages = ["commit-msg"]
 [[repos]]
 repo = "builtin"
 hooks = [
-    { id = "trailing-whitespace" },
+    { id = "trailing-whitespace", args = ["--markdown-linebreak-ext=md"] },
     { id = "end-of-file-fixer" },
     { id = "check-added-large-files" },
+    { id = "check-toml"},
 ]
