@@ -5,11 +5,11 @@
 # Copyright (c) 2026 Noda Hiroyuki.
 """Taskエンティティ."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from .entity import Entity
-from .value_object import Priority
+from .value_object import Priority, TaskStatus
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -23,3 +23,4 @@ class Task(Entity):
     description: str
     project_id: UUID
     priority: Priority = Priority.MEDIUM
+    status: TaskStatus = field(default=TaskStatus.TODO, init=False)

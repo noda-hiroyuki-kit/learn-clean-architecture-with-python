@@ -8,6 +8,14 @@
 from enum import Enum
 
 
+class TaskStatus(Enum):
+    """タスクの状態を表すValue Object."""
+
+    TODO = "TODO"
+    IN_PROGRESS = "IN_PROGRESS"
+    DONE = "DONE"
+
+
 class Priority(Enum):
     """タスクの優先度を表すValue Object."""
 
