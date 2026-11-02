@@ -116,3 +116,92 @@ def test_期限が現在時刻と同じ場合はtime_remainingがゼロを返す
     deadline = Deadline(due_date=due_date)
     _stub_now(monkeypatch, due_date)
     assert deadline.time_remaining() == dt.timedelta(0)
+
+
+@pytest.mark.parametrize(
+    ("remaining", "expected"),
+    [
+        pytest.param(dt.timedelta(hours=12), True, id="within-default-threshold"),
+        pytest.param(dt.timedelta(days=1), True, id="at-default-threshold"),
+        pytest.param(
+            dt.timedelta(days=1, microseconds=1),
+            False,
+            id="above-default-threshold",
+        ),
+        pytest.param(dt.timedelta(microseconds=1), True, id="just-before-deadline"),
+        pytest.param(dt.timedelta(0), False, id="at-deadline"),
+        pytest.param(dt.timedelta(microseconds=-1), False, id="overdue"),
+    ],
+)
+def test_is_approachingの既定しきい値で判定する_returns(
+    monkeypatch: pytest.MonkeyPatch,
+    remaining: dt.timedelta,
+    *,
+    expected: bool,
+) -> None:
+    """残り時間が正かつ1日以内の場合だけTrueを返す."""
+    now = dt.datetime(2024, 1, 1, tzinfo=dt.UTC)
+    due_date = now + dt.timedelta(days=2)
+    _stub_now(monkeypatch, now)
+    deadline = Deadline(due_date=due_date)
+    _stub_now(monkeypatch, due_date - remaining)
+
+    assert deadline.is_approaching() is expected
+
+
+@pytest.mark.parametrize(
+    ("remaining", "warning_threshold", "expected"),
+    [
+        pytest.param(
+            dt.timedelta(hours=1),
+            dt.timedelta(hours=2),
+            True,
+            id="within-custom-threshold",
+        ),
+        pytest.param(
+            dt.timedelta(hours=2),
+            dt.timedelta(hours=2),
+            True,
+            id="at-custom-threshold",
+        ),
+        pytest.param(
+            dt.timedelta(hours=2, microseconds=1),
+            dt.timedelta(hours=2),
+            False,
+            id="above-custom-threshold",
+        ),
+        pytest.param(
+            dt.timedelta(days=2),
+            dt.timedelta(days=3),
+            True,
+            id="threshold-longer-than-default",
+        ),
+        pytest.param(
+            dt.timedelta(hours=1),
+            dt.timedelta(0),
+            False,
+            id="zero-threshold",
+        ),
+        pytest.param(
+            dt.timedelta(hours=1),
+            dt.timedelta(hours=-1),
+            False,
+            id="negative-threshold",
+        ),
+    ],
+)
+def test_is_approachingの指定しきい値で判定する_returns(
+    monkeypatch: pytest.MonkeyPatch,
+    remaining: dt.timedelta,
+    warning_threshold: dt.timedelta,
+    *,
+    expected: bool,
+) -> None:
+    """指定したしきい値で期限の接近を判定する."""
+    now = dt.datetime(2024, 1, 1, tzinfo=dt.UTC)
+    due_date = now + dt.timedelta(days=3)
+    _stub_now(monkeypatch, now)
+    deadline = Deadline(due_date=due_date)
+    _stub_now(monkeypatch, due_date - remaining)
+
+    assert deadline.is_approaching(warning_threshold=warning_threshold) is expected

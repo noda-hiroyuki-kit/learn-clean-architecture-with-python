@@ -48,3 +48,10 @@ class Deadline:
     def time_remaining(self) -> dt.timedelta:
         """期限までの残り時間を返し、期限後はゼロを返す."""
         return max(dt.timedelta(0), self.due_date - dt.datetime.now(tz=dt.UTC))
+
+    def is_approaching(
+        self,
+        warning_threshold: dt.timedelta = dt.timedelta(days=1),  # noqa: ARG002
+    ) -> bool:
+        """Redフェーズ用に仮の期限接近判定を返す."""
+        return False
