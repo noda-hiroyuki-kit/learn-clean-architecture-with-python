@@ -113,7 +113,7 @@ docstring-code-format = false
 docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint.per-file-ignores]
-"**/{tests}/*" = ["S101"]
+"**/{tests}/*" = ["S101", "N802", "PLC2401"]
 
 [tool.ty]
 [tool.ty.environment]
@@ -177,6 +177,7 @@ commands = [
 [tool.pytest]
 minversion = "9.1.1"
 addopts = ["-v", "-s", "--strict-markers", "--cov", "--cov-report=html", "--cov-report=term"]
+pythonpath = ["."]
 testpaths = [
     "tests"
 ]
