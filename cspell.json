@@ -28,6 +28,7 @@
         "mnesia",
         "Noda",
         "nosetests",
+        "Packt",
         "pinact",
         "prek",
         "pybuilder",
