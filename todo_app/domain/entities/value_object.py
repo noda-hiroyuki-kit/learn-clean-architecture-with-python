@@ -40,3 +40,7 @@ class Deadline:
         if self.due_date < dt.datetime.now(tz=dt.UTC):
             msg = "期限は現在時刻以降でなければなりません。"
             raise ValueError(msg)
+
+    def is_overdue(self) -> bool:
+        """期限が過ぎているかどうかを返す."""
+        return dt.datetime.now(tz=dt.UTC) > self.due_date
