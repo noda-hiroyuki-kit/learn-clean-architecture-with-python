@@ -17,7 +17,8 @@ class TestTask:
         """Taskが正しく生成される."""
 
         @pytest.fixture(scope="class")
-        def fixture_task(self) -> Task:
+        @classmethod
+        def fixture_task(cls) -> Task:
             """テスト用のTaskを生成するフィクスチャ."""
             return Task(
                 title="Test Task",
