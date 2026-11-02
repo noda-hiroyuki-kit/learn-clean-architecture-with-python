@@ -2,6 +2,8 @@
 # Copyright (c) 2026 Noda Hiroyuki.
 """Taskエンティティのテスト."""
 
+from uuid import UUID
+
 import pytest
 
 from todo_app.domain.entities.task import Task
@@ -16,7 +18,11 @@ class TestTask:
         @pytest.fixture(scope="class")
         def fixture_task(self) -> Task:
             """テスト用のTaskを生成するフィクスチャ."""
-            return Task(title="Test Task", description="Test Description")
+            return Task(
+                title="Test Task",
+                description="Test Description",
+                project_id=UUID("12345678-1234-5678-1234-567812345678"),
+            )
 
         def test_タイトルが設定される(self, fixture_task: Task) -> None:
             """タイトルが設定されることを確認する."""
@@ -29,3 +35,9 @@ class TestTask:
         def test_descriptionが設定される(self, fixture_task: Task) -> None:
             """descriptionが設定されることを確認する."""
             assert fixture_task.description == "Test Description"
+
+        def test_project_idが設定される(self, fixture_task: Task) -> None:
+            """project_idが設定されることを確認する."""
+            assert fixture_task.project_id == UUID(
+                "12345678-1234-5678-1234-567812345678"
+            )

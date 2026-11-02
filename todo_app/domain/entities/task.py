@@ -6,8 +6,12 @@
 """Taskエンティティ."""
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .entity import Entity
+
+if TYPE_CHECKING:
+    from uuid import UUID
 
 
 @dataclass
@@ -16,3 +20,4 @@ class Task(Entity):
 
     title: str
     description: str
+    project_id: UUID
