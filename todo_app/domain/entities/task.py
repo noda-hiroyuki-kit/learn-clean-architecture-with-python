@@ -15,3 +15,4 @@ class Task(Entity):
     """Taskエンティティ."""
 
     title: str
+    description: str
