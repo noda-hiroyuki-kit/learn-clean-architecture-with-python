@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from .entity import Entity
-from .value_object import Priority, TaskStatus
+from .value_object import Deadline, Priority, TaskStatus
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -22,5 +22,6 @@ class Task(Entity):
     title: str
     description: str
     project_id: UUID
+    due_date: Deadline | None = None
     priority: Priority = Priority.MEDIUM
     status: TaskStatus = field(default=TaskStatus.TODO, init=False)
