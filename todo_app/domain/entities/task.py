@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .entity import Entity
+from .value_object import Priority
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -21,3 +22,4 @@ class Task(Entity):
     title: str
     description: str
     project_id: UUID
+    priority: Priority = Priority.MEDIUM

@@ -7,6 +7,7 @@ from uuid import UUID
 import pytest
 
 from todo_app.domain.entities.task import Task
+from todo_app.domain.entities.value_object import Priority
 
 
 class TestTask:
@@ -41,3 +42,7 @@ class TestTask:
             assert fixture_task.project_id == UUID(
                 "12345678-1234-5678-1234-567812345678"
             )
+
+        def test_priorityは既定でMEDIUMに設定される(self, fixture_task: Task) -> None:
+            """priorityが既定でMEDIUMに設定されることを確認する."""
+            assert fixture_task.priority == Priority.MEDIUM
