@@ -1,7 +1,7 @@
 [project]
 name = "learn-clean-architecture-with-python"
 version = "0.1.0"
-requires-python = ">=3.15"
+requires-python = ">=3.14"
 dependencies = []
 
 [dependency-groups]
@@ -118,10 +118,10 @@ docstring-code-line-length = "dynamic"
 [tool.ty]
 [tool.ty.environment]
 python-version = "3.14"
-root = ["clean_arch_app"]
+root = ["todo_app"]
 
 [tool.ty.src]
-include = ["clean_arch_app"]
+include = ["todo_app"]
 respect-ignore-files = true
 
 [tool.ty.analysis]
@@ -153,7 +153,6 @@ commands = [
     ["uv", "python", "upgrade", "3.14"],
     ["uv", "python", "upgrade", "3.15"],
     ["prek", "update", "--cooldown-days", "10"],
-    ["uv", "run", "scripts/pinact.py"],
     ["uv", "lock", "-U"],
     ["uv", "sync"],
 ]
@@ -184,7 +183,7 @@ testpaths = [
 markers=["develop_research"]
 
 [tool.coverage.run]
-source = ["src/pre_commit_vba", "scripts"]
+source = ["todo_app"]
 [tool.coverage.report]
 fail_under = 80
 exclude_also = [
