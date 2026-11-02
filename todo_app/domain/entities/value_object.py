@@ -51,7 +51,7 @@ class Deadline:
 
     def is_approaching(
         self,
-        warning_threshold: dt.timedelta = dt.timedelta(days=1),  # noqa: ARG002
+        warning_threshold: dt.timedelta = dt.timedelta(days=1),
     ) -> bool:
-        """Redフェーズ用に仮の期限接近判定を返す."""
-        return False
+        """期限までの残り時間が正かつ指定したしきい値以内の場合にTrueを返す."""
+        return dt.timedelta(0) < self.time_remaining() <= warning_threshold
