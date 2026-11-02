@@ -86,3 +86,33 @@ def test_期限が現在時刻と同じ場合はis_overdueがfalseを返すこ�
     deadline = Deadline(due_date=due_date)
     _stub_now(monkeypatch, due_date)
     assert deadline.is_overdue() is False
+
+
+def test_期限まで時間がある場合はtime_remainingが残り時間を返すことを検証する_returns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """期限まで時間がある場合はtime_remainingが残り時間を返すことを検証する."""
+    due_date = dt.datetime.now(tz=dt.UTC) + dt.timedelta(hours=2)
+    deadline = Deadline(due_date=due_date)
+    _stub_now(monkeypatch, due_date - dt.timedelta(minutes=30))
+    assert deadline.time_remaining() == dt.timedelta(minutes=30)
+
+
+def test_期限が過ぎている場合はtime_remainingがゼロを返すことを検証する_returns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """期限が過ぎている場合はtime_remainingがゼロを返すことを検証する."""
+    due_date = dt.datetime.now(tz=dt.UTC) + dt.timedelta(hours=1)
+    deadline = Deadline(due_date=due_date)
+    _stub_now(monkeypatch, due_date + dt.timedelta(hours=1))
+    assert deadline.time_remaining() == dt.timedelta(0)
+
+
+def test_期限が現在時刻と同じ場合はtime_remainingがゼロを返すことを検証する_returns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """期限が現在時刻と同じ場合はtime_remainingがゼロを返すことを検証する."""
+    due_date = dt.datetime.now(tz=dt.UTC) + dt.timedelta(hours=1)
+    deadline = Deadline(due_date=due_date)
+    _stub_now(monkeypatch, due_date)
+    assert deadline.time_remaining() == dt.timedelta(0)

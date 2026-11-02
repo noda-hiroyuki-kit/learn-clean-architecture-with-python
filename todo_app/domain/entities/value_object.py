@@ -44,3 +44,7 @@ class Deadline:
     def is_overdue(self) -> bool:
         """期限が過ぎているかどうかを返す."""
         return dt.datetime.now(tz=dt.UTC) > self.due_date
+
+    def time_remaining(self) -> dt.timedelta:
+        """Redフェーズ用に仮の残り時間を返す."""
+        return dt.timedelta(seconds=-1)
