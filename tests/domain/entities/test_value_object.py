@@ -6,6 +6,7 @@ import datetime as dt
 
 import pytest
 
+from todo_app.domain.entities import value_object
 from todo_app.domain.entities.value_object import Deadline
 
 
@@ -20,3 +21,27 @@ def test_deadlineは現在時刻以降であることを検証する_requires() 
     past_date = dt.datetime.now(tz=dt.UTC) - dt.timedelta(days=1)
     with pytest.raises(ValueError, match="期限は現在時刻以降でなければなりません。"):
         Deadline(due_date=past_date)
+
+
+def test_deadlineが現在時刻以降なら正常に作成できることを検証する_requires() -> None:
+    """期限が現在時刻以降である場合は正常に作成できることを検証する."""
+    future_date = dt.datetime.now(tz=dt.UTC) + dt.timedelta(days=1)
+    deadline = Deadline(due_date=future_date)
+    assert deadline.due_date == future_date
+
+
+def test_deadlineが現在時刻と同じ場合は正常に作成できることを検証する_requires(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """期限が現在時刻と同じ場合は正常に作成できることを検証する."""
+    real_datetime = dt.datetime
+    now = real_datetime(2024, 1, 1, 12, 0, 0, tzinfo=dt.UTC)
+
+    class StubDatetime(real_datetime):
+        @classmethod
+        def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:
+            return now if tz is None else now.astimezone(tz)
+
+    monkeypatch.setattr(value_object.dt, "datetime", StubDatetime)
+    deadline = Deadline(due_date=now)
+    assert deadline.due_date == now
