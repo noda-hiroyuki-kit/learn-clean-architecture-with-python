@@ -49,3 +49,7 @@ class Task(Entity):
             Taskが既に完了している場合.
 
         """
+        if self.status == TaskStatus.DONE:
+            msg = "Taskは既に完了しています。"
+            raise ValueError(msg)
+        self.status = TaskStatus.DONE
