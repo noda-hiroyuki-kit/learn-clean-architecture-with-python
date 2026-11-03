@@ -63,4 +63,4 @@ class Task(Entity):
             期限が過ぎている場合はTrue、それ以外はFalse.
 
         """
-        return True
+        return self.due_date is not None and self.due_date.is_overdue()
