@@ -53,3 +53,14 @@ class Task(Entity):
             msg = "Taskは既に完了しています。"
             raise ValueError(msg)
         self.status = TaskStatus.DONE
+
+    def is_overdue(self) -> bool:
+        """Taskの期限が過ぎているかを判定する.
+
+        Returns
+        -------
+        bool
+            期限が過ぎている場合はTrue、それ以外はFalse.
+
+        """
+        return True

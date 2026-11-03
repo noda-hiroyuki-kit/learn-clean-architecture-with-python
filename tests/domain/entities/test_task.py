@@ -53,8 +53,8 @@ class TestTask:
             """statusが既定でTODOに設定されることを確認する."""
             assert fixture_task.status == TaskStatus.TODO
 
-    class TestTaskのStatus遷移テスト:
-        """TaskのStatus遷移に関するテスト."""
+    class TestTaskのメソッドのテスト:
+        """Taskのメソッドに関するテスト."""
 
         @pytest.fixture
         @classmethod
@@ -65,6 +65,30 @@ class TestTask:
                 description="Draft and review the proposal for the new client project",
                 project_id=UUID("12345678-1234-5678-1234-567812345678"),
                 due_date=Deadline(dt.datetime.now(tz=dt.UTC) + dt.timedelta(days=7)),
+                priority=Priority.HIGH,
+            )
+
+        @pytest.fixture
+        @classmethod
+        def fixture_task_overdue(cls) -> Task:
+            """テスト用のTaskを生成するフィクスチャ."""
+            return Task(
+                title="Complete project proposal",
+                description="Draft and review the proposal for the new client project",
+                project_id=UUID("12345678-1234-5678-1234-567812345678"),
+                due_date=Deadline(dt.datetime.now(tz=dt.UTC) + dt.timedelta(days=1)),
+                priority=Priority.HIGH,
+            )
+
+        @pytest.fixture
+        @classmethod
+        def fixture_task_due_none(cls) -> Task:
+            """期限が設定されていないTaskを生成するフィクスチャ."""
+            return Task(
+                title="Complete project proposal",
+                description="Draft and review the proposal for the new client project",
+                project_id=UUID("12345678-1234-5678-1234-567812345678"),
+                due_date=None,
                 priority=Priority.HIGH,
             )
 
@@ -103,3 +127,32 @@ class TestTask:
             fixture_task.complete()
             with pytest.raises(ValueError, match="Taskは既に完了しています。"):
                 fixture_task.complete()
+
+        def test_期限を過ぎていないときはis_overdueはFalseになる(
+            self, fixture_task: Task
+        ) -> None:
+            """期限を過ぎていないときはis_overdueがFalseになることを確認する."""
+            assert fixture_task.is_overdue() is False
+
+        def test_期限を過ぎているときはis_overdueはTrueになる(
+            self, fixture_task_overdue: Task, monkeypatch: pytest.MonkeyPatch
+        ) -> None:
+            """期限を過ぎているときはis_overdueがTrueになることを確認する."""
+            due_date = fixture_task_overdue.due_date
+            assert due_date is not None
+            real_datetime = dt.datetime
+            now = due_date.due_date + dt.timedelta(seconds=1)
+
+            class StubDatetime(real_datetime):
+                @classmethod
+                def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:
+                    return now if tz is None else now.astimezone(tz)
+
+            monkeypatch.setattr(dt, "datetime", StubDatetime)
+            assert fixture_task_overdue.is_overdue() is True
+
+        def test_期限が設定されていないときはis_overdueはFalseになる(
+            self, fixture_task_due_none: Task
+        ) -> None:
+            """期限が設定されていないときはis_overdueがFalseになることを確認する."""
+            assert fixture_task_due_none.is_overdue() is False
