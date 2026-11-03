@@ -16,3 +16,4 @@ class Project(Entity):
     """Projectエンティティ."""
 
     name: str
+    description: str = ""

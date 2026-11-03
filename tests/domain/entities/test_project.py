@@ -19,7 +19,14 @@ class TestProject:
             """テスト用のProjectを生成するフィクスチャ."""
             return Project(
                 name="Test Project",
+                description="Test Description",
             )
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_project_without_description(cls) -> Project:
+            """descriptionなしのテスト用Projectを生成するフィクスチャ."""
+            return Project(name="Test Project Without Description")
 
         def test_名前が設定される(self, fixture_project: Project) -> None:
             """名前が設定されることを確認する."""
@@ -28,3 +35,13 @@ class TestProject:
         def test_idが自動生成される(self, fixture_project: Project) -> None:
             """idが自動生成されることを確認する."""
             assert fixture_project.id is not None
+
+        def test_descriptionが設定される(self, fixture_project: Project) -> None:
+            """descriptionが設定されることを確認する."""
+            assert fixture_project.description == "Test Description"
+
+        def test_規定値のdescriptionが文字列長0で設定される(
+            self, fixture_project_without_description: Project
+        ) -> None:
+            """descriptionが規定値で文字列長0で設定されることを確認する."""
+            assert fixture_project_without_description.description == ""
