@@ -2,12 +2,13 @@
 # Copyright (c) 2026 Noda Hiroyuki.
 """Taskエンティティのテスト."""
 
+import datetime as dt
 from uuid import UUID
 
 import pytest
 
 from todo_app.domain.entities.task import Task
-from todo_app.domain.entities.value_object import Priority, TaskStatus
+from todo_app.domain.entities.value_object import Deadline, Priority, TaskStatus
 
 
 class TestTask:
@@ -51,3 +52,31 @@ class TestTask:
         def test_statusは既定でTODOに設定される(self, fixture_task: Task) -> None:
             """statusが既定でTODOに設定されることを確認する."""
             assert fixture_task.status == TaskStatus.TODO
+
+    class TestTaskのStatus遷移テスト:
+        """TaskのStatus遷移に関するテスト."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_task(cls) -> Task:
+            """テスト用のTaskを生成するフィクスチャ."""
+            return Task(
+                title="Complete project proposal",
+                description="Draft and review the proposal for the new client project",
+                project_id=UUID("12345678-1234-5678-1234-567812345678"),
+                due_date=Deadline(dt.datetime.now(tz=dt.UTC) + dt.timedelta(days=7)),
+                priority=Priority.HIGH,
+            )
+
+        def test_statusがtodoの時はstartできる(self, fixture_task: Task) -> None:
+            """statusがTODOの時はstartできることを確認する."""
+            fixture_task.start()
+            assert fixture_task.status == TaskStatus.IN_PROGRESS
+
+        def test_statusがin_progressの時はstartできない(
+            self, fixture_task: Task
+        ) -> None:
+            """statusがIN_PROGRESSの時はstartできないことを確認する."""
+            fixture_task.start()
+            with pytest.raises(ValueError):  # noqa: PT011
+                fixture_task.start()

@@ -25,3 +25,13 @@ class Task(Entity):
     due_date: Deadline | None = None
     priority: Priority = Priority.MEDIUM
     status: TaskStatus = field(default=TaskStatus.TODO, init=False)
+
+    def start(self) -> None:
+        """Taskを開始する.
+
+        Raises
+        ------
+        ValueError
+            Taskがすでに進行中または完了している場合.
+
+        """
