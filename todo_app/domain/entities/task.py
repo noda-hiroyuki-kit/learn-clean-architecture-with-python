@@ -35,3 +35,7 @@ class Task(Entity):
             Taskがすでに進行中または完了している場合.
 
         """
+        if self.status != TaskStatus.TODO:
+            msg = "TaskのstatusがTODOの場合のみ開始できます。"
+            raise ValueError(msg)
+        self.status = TaskStatus.IN_PROGRESS

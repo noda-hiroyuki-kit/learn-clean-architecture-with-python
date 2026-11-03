@@ -56,7 +56,7 @@ class TestTask:
     class TestTaskのStatus遷移テスト:
         """TaskのStatus遷移に関するテスト."""
 
-        @pytest.fixture(scope="class")
+        @pytest.fixture
         @classmethod
         def fixture_task(cls) -> Task:
             """テスト用のTaskを生成するフィクスチャ."""
@@ -78,5 +78,7 @@ class TestTask:
         ) -> None:
             """statusがIN_PROGRESSの時はstartできないことを確認する."""
             fixture_task.start()
-            with pytest.raises(ValueError):  # noqa: PT011
+            with pytest.raises(
+                ValueError, match="TaskのstatusがTODOの場合のみ開始できます。"
+            ):
                 fixture_task.start()
