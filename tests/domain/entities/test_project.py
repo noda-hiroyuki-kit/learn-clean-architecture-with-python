@@ -2,9 +2,12 @@
 # Copyright (c) 2026 Noda Hiroyuki.
 """Projectエンティティのテスト."""
 
+from uuid import UUID
+
 import pytest
 
 from todo_app.domain.entities.project import Project
+from todo_app.domain.entities.task import Task
 
 
 class TestProject:
@@ -45,3 +48,77 @@ class TestProject:
         ) -> None:
             """descriptionが規定値で文字列長0で設定されることを確認する."""
             assert fixture_project_without_description.description == ""
+
+    class TestProjectのメソッドのテスト:
+        """Projectのメソッドに関するテスト."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_project(cls) -> Project:
+            """テスト用のProjectを生成するフィクスチャ."""
+            return Project(
+                name="Test Project",
+                description="Test Description",
+            )
+
+        @pytest.fixture
+        @classmethod
+        def fixture_task(cls, fixture_project: Project) -> Task:
+            """テスト用のTaskを生成するフィクスチャ."""
+            return Task(
+                title="Test Task",
+                description="Test Description",
+                project_id=fixture_project.id,
+            )
+
+        def test_add_taskでタスクが追加される(
+            self, fixture_project: Project, fixture_task: Task
+        ) -> None:
+            """add_taskでタスクが追加されることを確認する."""
+            fixture_project.add_task(fixture_task)
+            assert fixture_project.get_task(fixture_task.id) is fixture_task
+
+        def test_get_taskで追加したタスクが取得できる(
+            self, fixture_project: Project, fixture_task: Task
+        ) -> None:
+            """get_taskで追加したタスクが取得できることを確認する."""
+            fixture_project.add_task(fixture_task)
+            task = fixture_project.get_task(fixture_task.id)
+            assert task is fixture_task
+
+        def test_get_taskで存在しないタスクはNoneが返る(
+            self, fixture_project: Project
+        ) -> None:
+            """get_taskで存在しないタスクはNoneが返ることを確認する."""
+            task = fixture_project.get_task(
+                UUID("12345678-1234-5678-1234-567812345678")
+            )
+            assert task is None
+
+        def test_remove_taskでタスクが削除される(
+            self, fixture_project: Project, fixture_task: Task
+        ) -> None:
+            """remove_taskでタスクが削除されることを確認する."""
+            fixture_project.add_task(fixture_task)
+            fixture_project.remove_task(fixture_task.id)
+            assert fixture_project.get_task(fixture_task.id) is None
+
+        def test_remove_taskで存在しないタスクを削除してもエラーにならない(
+            self, fixture_project: Project
+        ) -> None:
+            """remove_taskで存在しないタスクを削除してもエラーにならないことを確認する."""
+            fixture_project.remove_task(UUID("12345678-1234-5678-1234-567812345678"))
+            assert fixture_project.tasks == []
+
+        def test_tasksでタスクの一覧が取得できる(
+            self, fixture_project: Project, fixture_task: Task
+        ) -> None:
+            """tasksでタスクの一覧が取得できることを確認する."""
+            fixture_project.add_task(fixture_task)
+            assert fixture_project.tasks == [fixture_task]
+
+        def test_タスクが追加されていないときはtasksは空のリストを返す(
+            self, fixture_project: Project
+        ) -> None:
+            """タスクが追加されていないときはtasksが空のリストを返すことを確認する."""
+            assert fixture_project.tasks == []
