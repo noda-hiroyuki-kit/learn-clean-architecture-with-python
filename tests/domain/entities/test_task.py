@@ -82,3 +82,24 @@ class TestTask:
                 ValueError, match="TaskのstatusがTODOの場合のみ開始できます。"
             ):
                 fixture_task.start()
+
+        def test_statusがtodoの時はcompletedにできる(self, fixture_task: Task) -> None:
+            """statusがTODOの時はcompletedにできることを確認する."""
+            fixture_task.complete()
+            assert fixture_task.status == TaskStatus.DONE
+
+        def test_statusがin_progressの時はcompletedにできる(
+            self, fixture_task: Task
+        ) -> None:
+            """statusがIN_PROGRESSの時はcompletedにできることを確認する."""
+            fixture_task.start()
+            fixture_task.complete()
+            assert fixture_task.status == TaskStatus.DONE
+
+        def test_statusがdoneの時はcompletedにできない(
+            self, fixture_task: Task
+        ) -> None:
+            """statusがDONEの時はcompletedにできないことを確認する."""
+            fixture_task.complete()
+            with pytest.raises(ValueError, match="Taskは既に完了しています。"):
+                fixture_task.complete()

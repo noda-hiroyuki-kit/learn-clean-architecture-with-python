@@ -39,3 +39,13 @@ class Task(Entity):
             msg = "TaskのstatusがTODOの場合のみ開始できます。"
             raise ValueError(msg)
         self.status = TaskStatus.IN_PROGRESS
+
+    def complete(self) -> None:
+        """Taskを完了する.
+
+        Raises
+        ------
+        ValueError
+            Taskが既に完了している場合.
+
+        """
