@@ -118,7 +118,7 @@ docstring-code-line-length = "dynamic"
 [tool.ty]
 [tool.ty.environment]
 python-version = "3.14"
-root = ["todo_app"]
+root = ["."]
 
 [tool.ty.src]
 include = ["todo_app"]
@@ -176,7 +176,7 @@ commands = [
 [tool.pytest]
 minversion = "9.1.1"
 addopts = ["-v", "-s", "--strict-markers", "--cov", "--cov-report=html", "--cov-report=term"]
-pythonpath = ["."]
+pythonpath = ["todo_app"]
 testpaths = [
     "tests"
 ]
