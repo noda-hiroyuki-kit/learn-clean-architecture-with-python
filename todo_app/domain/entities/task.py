@@ -8,8 +8,8 @@
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from .entity import Entity
-from .value_object import Deadline, Priority, TaskStatus
+from todo_app.domain.entities.entity import Entity
+from todo_app.domain.value_object import Deadline, Priority, TaskStatus
 
 if TYPE_CHECKING:
     from uuid import UUID

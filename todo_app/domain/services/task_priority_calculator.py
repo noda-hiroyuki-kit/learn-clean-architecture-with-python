@@ -8,7 +8,7 @@
 import datetime as dt
 from typing import TYPE_CHECKING
 
-from todo_app.domain.entities.value_object import Priority
+from todo_app.domain.value_object import Priority
 
 if TYPE_CHECKING:
     from todo_app.domain.entities.task import Task

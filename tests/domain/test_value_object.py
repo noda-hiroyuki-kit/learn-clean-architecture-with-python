@@ -6,8 +6,7 @@ import datetime as dt
 
 import pytest
 
-from todo_app.domain.entities import value_object
-from todo_app.domain.entities.value_object import Deadline
+from todo_app.domain.value_object import Deadline
 
 
 def test_deadlineにはタイムゾーン情報が必要であることを検証する_requires() -> None:
@@ -42,7 +41,7 @@ def test_deadlineが現在時刻と同じ場合は正常に作成できること
         def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:
             return now if tz is None else now.astimezone(tz)
 
-    monkeypatch.setattr(value_object.dt, "datetime", StubDatetime)
+    monkeypatch.setattr(dt, "datetime", StubDatetime)
     deadline = Deadline(due_date=now)
     assert deadline.due_date == now
 
@@ -56,7 +55,7 @@ def _stub_now(monkeypatch: pytest.MonkeyPatch, now: dt.datetime) -> None:
         def now(cls, tz: dt.tzinfo | None = None) -> dt.datetime:
             return now if tz is None else now.astimezone(tz)
 
-    monkeypatch.setattr(value_object.dt, "datetime", StubDatetime)
+    monkeypatch.setattr(dt, "datetime", StubDatetime)
 
 
 def test_期限が過ぎている場合はis_overdueがtrueを返すことを検証する_returns(

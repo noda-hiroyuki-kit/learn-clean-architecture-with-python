@@ -9,10 +9,9 @@ from uuid import UUID
 
 import pytest
 
-from todo_app.domain.entities import value_object
 from todo_app.domain.entities.task import Task
-from todo_app.domain.entities.value_object import Deadline, Priority
 from todo_app.domain.services.task_priority_calculator import TaskPriorityCalculator
+from todo_app.domain.value_object import Deadline, Priority
 
 
 @pytest.mark.parametrize(
@@ -48,7 +47,7 @@ def test_期限に応じた優先度が返される(
         def now(cls, tz: dt.tzinfo | None = None) -> Self:
             return cls.fromtimestamp(now.timestamp(), tz)
 
-    monkeypatch.setattr(value_object.dt, "datetime", StubDatetime)
+    monkeypatch.setattr(dt, "datetime", StubDatetime)
     task = Task(
         title="Test Task",
         description="Test Description",

@@ -8,7 +8,7 @@ from uuid import UUID
 import pytest
 
 from todo_app.domain.entities.task import Task
-from todo_app.domain.entities.value_object import Deadline, Priority, TaskStatus
+from todo_app.domain.value_object import Deadline, Priority, TaskStatus
 
 
 class TestTask:
