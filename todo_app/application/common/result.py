@@ -38,3 +38,26 @@ class Error:
     def validation_error(cls, message: str) -> Self:
         """バリデーションエラーを生成する."""
         return cls(code=ErrorCode.VALIDATION_ERROR, message=message)
+
+
+@dataclass(frozen=True)
+class Result:
+    """ユースケースの実行が成功したか失敗したかを表す."""
+
+    value: Any = None
+    error: Error | None = None
+
+    @property
+    def is_success(self) -> bool:
+        """ユースケースの実行が成功したかどうかを返す."""
+        return self.error is None
+
+    @classmethod
+    def success(cls, value: Any) -> Self:  # noqa: ANN401
+        """成功結果を生成する."""
+        return cls(value=value)
+
+    @classmethod
+    def failure(cls, error: Error) -> Self:
+        """失敗結果を生成する."""
+        return cls(error=error)
