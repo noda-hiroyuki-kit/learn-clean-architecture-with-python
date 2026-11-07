@@ -43,6 +43,7 @@
         "spyderproject",
         "spyproject",
         "testpaths",
+        "usefixtures",
         "webassets",
         "zizmor"
     ]

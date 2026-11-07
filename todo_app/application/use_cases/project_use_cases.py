@@ -1,0 +1,78 @@
+# https://github.com/PacktPublishing/Clean-Architecture-with-Python
+# SPDX-License-Identifier: MIT
+# MIT License
+# Copyright (c) 2024 Packt
+# Copyright (c) 2026 Noda Hiroyuki.
+"""Projectに関連するユースケースを定義するモジュール."""
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+from todo_app.application.common.result import Error, Result
+from todo_app.application.repositories.project_repository import ProjectRepository
+from todo_app.application.repositories.task_repository import TaskRepository
+from todo_app.application.service_ports.notifications import NotificationPort
+from todo_app.domain.exceptions import ProjectNotFoundError, ValidationError
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from todo_app.application.repositories.project_repository import ProjectRepository
+    from todo_app.application.repositories.task_repository import TaskRepository
+    from todo_app.application.service_ports.notifications import (
+        NotificationPort,
+    )
+
+
+@dataclass(frozen=True)
+class CompleteProjectUseCase:
+    """プロジェクトを完了するユースケース."""
+
+    project_repository: ProjectRepository
+    task_repository: TaskRepository
+    notification_service: NotificationPort
+
+    def execute(self, project_id: UUID, completion_notes: str | None = None) -> Result:
+        """プロジェクトを完了する.
+
+        Parameters
+        ----------
+        project_id : UUID
+            完了するプロジェクトの一意な識別子.
+        completion_notes : str | None, optional
+            完了時のメモ, by default None
+
+        Returns
+        -------
+        Result
+            ユースケースの実行結果.
+
+        """
+        try:
+            # Validate project exists
+            project = self.project_repository.get(project_id)
+
+            # Complete all outstanding tasks
+            for task in project.incomplete_tasks:
+                task.complete()
+                self.task_repository.save(task)
+                self.notification_service.notify_task_completed(task)
+
+            # Complete the project itself
+            project.mark_completed(notes=completion_notes)
+            self.project_repository.save(project)
+
+            return Result.success(
+                {
+                    "id": str(project.id),
+                    "status": project.status,
+                    "completion_date": project.completed_at,
+                    "task_count": len(project.tasks),
+                    "completion_notes": project.completion_notes,
+                }
+            )
+
+        except ProjectNotFoundError:
+            return Result.failure(Error.not_found("Project", str(project_id)))
+        except ValidationError as e:
+            return Result.failure(Error.validation_error(str(e)))
