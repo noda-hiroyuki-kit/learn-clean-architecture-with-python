@@ -2,6 +2,7 @@
 # Copyright (c) 2026 Noda Hiroyuki.
 """Projectエンティティのテスト."""
 
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import pytest
@@ -9,6 +10,9 @@ import pytest
 from todo_app.domain.entities.project import Project
 from todo_app.domain.entities.task import Task
 from todo_app.domain.value_object import ProjectStatus
+
+if TYPE_CHECKING:
+    import datetime as dt
 
 
 class TestProject:
@@ -94,6 +98,23 @@ class TestProject:
             fixture_project.add_task(fixture_task)
             assert fixture_project.get_task(fixture_task.id) is fixture_task
 
+        def test_add_taskでタスクのproject_idが設定される(
+            self, fixture_project: Project, fixture_task: Task
+        ) -> None:
+            """add_taskでタスクのproject_idが設定されることを確認する."""
+            fixture_project.add_task(fixture_task)
+            assert fixture_task.project_id == fixture_project.id
+
+        def test_完了したプロジェクトにタスクを追加するとValueErrorになる(
+            self, fixture_project: Project, fixture_task: Task
+        ) -> None:
+            """完了したプロジェクトにタスクを追加するとValueErrorになることを確認する."""
+            fixture_project.mark_completed()
+            with pytest.raises(
+                ValueError, match="完了したプロジェクトにはタスクを追加できません"
+            ):
+                fixture_project.add_task(fixture_task)
+
         def test_get_taskで追加したタスクが取得できる(
             self, fixture_project: Project, fixture_task: Task
         ) -> None:
@@ -119,6 +140,14 @@ class TestProject:
             fixture_project.remove_task(fixture_task.id)
             assert fixture_project.get_task(fixture_task.id) is None
 
+        def test_remove_taskでタスクのproject_idがNoneになる(
+            self, fixture_project: Project, fixture_task: Task
+        ) -> None:
+            """remove_taskでタスクのproject_idがNoneになることを確認する."""
+            fixture_project.add_task(fixture_task)
+            fixture_project.remove_task(fixture_task.id)
+            assert fixture_task.project_id is None
+
         def test_remove_taskで存在しないタスクを削除してもエラーにならない(
             self, fixture_project: Project
         ) -> None:
@@ -138,3 +167,83 @@ class TestProject:
         ) -> None:
             """タスクが追加されていないときはtasksが空のリストを返すことを確認する."""
             assert fixture_project.tasks == []
+
+        def test_incomplete_tasksで未完了のタスクのみ取得できる(
+            self, fixture_project: Project, fixture_task: Task
+        ) -> None:
+            """incomplete_tasksで未完了のタスクのみ取得できることを確認する."""
+            done_task = Task(title="Done Task", description="Done Description")
+            fixture_project.add_task(fixture_task)
+            fixture_project.add_task(done_task)
+            done_task.complete()
+            assert fixture_project.incomplete_tasks == [fixture_task]
+
+        def test_全てのタスクが完了しているときはincomplete_tasksは空のリストを返す(
+            self, fixture_project: Project, fixture_task: Task
+        ) -> None:
+            """全てのタスクが完了しているときはincomplete_tasksが空のリストを返すことを確認する."""
+            fixture_project.add_task(fixture_task)
+            fixture_task.complete()
+            assert fixture_project.incomplete_tasks == []
+
+    class TestMarkCompletedでプロジェクトが完了する:
+        """mark_completedでプロジェクトが完了することのテスト."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_completed_project(cls) -> Project:
+            """mark_completed済みのテスト用Projectを生成するフィクスチャ."""
+            project = Project(name="Test Project")
+            project.mark_completed(notes="完了メモ")
+            return project
+
+        def test_statusがCOMPLETEDになる(
+            self, fixture_completed_project: Project
+        ) -> None:
+            """statusがCOMPLETEDになることを確認する."""
+            assert fixture_completed_project.status is ProjectStatus.COMPLETED
+
+        def test_completed_atが設定される(
+            self, fixture_completed_project: Project
+        ) -> None:
+            """completed_atが設定されることを確認する."""
+            assert fixture_completed_project.completed_at is not None
+
+        def test_completion_notesが設定される(
+            self, fixture_completed_project: Project
+        ) -> None:
+            """completion_notesが設定されることを確認する."""
+            assert fixture_completed_project.completion_notes == "完了メモ"
+
+        def test_notesを省略するとcompletion_notesはNoneになる(self) -> None:
+            """notesを省略するとcompletion_notesがNoneになることを確認する."""
+            project = Project(name="Test Project")
+            project.mark_completed()
+            assert project.completion_notes is None
+
+    class Test完了済みプロジェクトでmarkCompletedを再度呼んでも状態が変わらない:
+        """完了済みプロジェクトでmark_completedを再度呼んでも状態が変わらないことのテスト."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_twice_completed_project(cls) -> tuple[Project, dt.datetime | None]:
+            """mark_completedを2回呼んだProjectと1回目のcompleted_atを返すフィクスチャ."""
+            project = Project(name="Test Project")
+            project.mark_completed(notes="最初のメモ")
+            first_completed_at = project.completed_at
+            project.mark_completed(notes="2回目のメモ")
+            return project, first_completed_at
+
+        def test_completed_atが変わらない(
+            self, fixture_twice_completed_project: tuple[Project, dt.datetime | None]
+        ) -> None:
+            """completed_atが変わらないことを確認する."""
+            project, first_completed_at = fixture_twice_completed_project
+            assert project.completed_at == first_completed_at
+
+        def test_completion_notesが変わらない(
+            self, fixture_twice_completed_project: tuple[Project, dt.datetime | None]
+        ) -> None:
+            """completion_notesが変わらないことを確認する."""
+            project, _ = fixture_twice_completed_project
+            assert project.completion_notes == "最初のメモ"
