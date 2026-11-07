@@ -3,7 +3,6 @@
 """Taskエンティティのテスト."""
 
 import datetime as dt
-from uuid import UUID
 
 import pytest
 
@@ -24,7 +23,6 @@ class TestTask:
             return Task(
                 title="Test Task",
                 description="Test Description",
-                project_id=UUID("12345678-1234-5678-1234-567812345678"),
             )
 
         def test_タイトルが設定される(self, fixture_task: Task) -> None:
@@ -39,11 +37,9 @@ class TestTask:
             """descriptionが設定されることを確認する."""
             assert fixture_task.description == "Test Description"
 
-        def test_project_idが設定される(self, fixture_task: Task) -> None:
-            """project_idが設定されることを確認する."""
-            assert fixture_task.project_id == UUID(
-                "12345678-1234-5678-1234-567812345678"
-            )
+        def test_project_idは既定でNoneに設定される(self, fixture_task: Task) -> None:
+            """project_idが既定でNoneに設定されることを確認する."""
+            assert fixture_task.project_id is None
 
         def test_priorityは既定でMEDIUMに設定される(self, fixture_task: Task) -> None:
             """priorityが既定でMEDIUMに設定されることを確認する."""
@@ -52,6 +48,16 @@ class TestTask:
         def test_statusは既定でTODOに設定される(self, fixture_task: Task) -> None:
             """statusが既定でTODOに設定されることを確認する."""
             assert fixture_task.status == TaskStatus.TODO
+
+        def test_completed_atは既定でNoneに設定される(self, fixture_task: Task) -> None:
+            """completed_atが既定でNoneに設定されることを確認する."""
+            assert fixture_task.completed_at is None
+
+        def test_completion_notesは既定でNoneに設定される(
+            self, fixture_task: Task
+        ) -> None:
+            """completion_notesが既定でNoneに設定されることを確認する."""
+            assert fixture_task.completion_notes is None
 
     class TestTaskのメソッドのテスト:
         """Taskのメソッドに関するテスト."""
@@ -63,7 +69,6 @@ class TestTask:
             return Task(
                 title="Complete project proposal",
                 description="Draft and review the proposal for the new client project",
-                project_id=UUID("12345678-1234-5678-1234-567812345678"),
                 due_date=Deadline(dt.datetime.now(tz=dt.UTC) + dt.timedelta(days=7)),
                 priority=Priority.HIGH,
             )
@@ -75,7 +80,6 @@ class TestTask:
             return Task(
                 title="Complete project proposal",
                 description="Draft and review the proposal for the new client project",
-                project_id=UUID("12345678-1234-5678-1234-567812345678"),
                 due_date=Deadline(dt.datetime.now(tz=dt.UTC) + dt.timedelta(days=1)),
                 priority=Priority.HIGH,
             )
@@ -87,7 +91,6 @@ class TestTask:
             return Task(
                 title="Complete project proposal",
                 description="Draft and review the proposal for the new client project",
-                project_id=UUID("12345678-1234-5678-1234-567812345678"),
                 due_date=None,
                 priority=Priority.HIGH,
             )
@@ -127,6 +130,31 @@ class TestTask:
             fixture_task.complete()
             with pytest.raises(ValueError, match="Taskは既に完了しています。"):
                 fixture_task.complete()
+
+        def test_completeするとcompleted_atに完了時刻が記録される(
+            self, fixture_task: Task
+        ) -> None:
+            """completeするとcompleted_atにUTCの完了時刻が記録されることを確認する."""
+            before = dt.datetime.now(tz=dt.UTC)
+            fixture_task.complete()
+            after = dt.datetime.now(tz=dt.UTC)
+            assert fixture_task.completed_at is not None
+            assert fixture_task.completed_at.tzinfo == dt.UTC
+            assert before <= fixture_task.completed_at <= after
+
+        def test_notesを指定してcompleteするとcompletion_notesが設定される(
+            self, fixture_task: Task
+        ) -> None:
+            """notesを指定してcompleteするとcompletion_notesが設定されることを確認する."""
+            fixture_task.complete(notes="完了メモ")
+            assert fixture_task.completion_notes == "完了メモ"
+
+        def test_notesを指定せずにcompleteするとcompletion_notesはNoneのまま(
+            self, fixture_task: Task
+        ) -> None:
+            """notesを指定せずにcompleteするとcompletion_notesがNoneのままであることを確認する."""
+            fixture_task.complete()
+            assert fixture_task.completion_notes is None
 
         def test_期限を過ぎていないときはis_overdueはFalseになる(
             self, fixture_task: Task

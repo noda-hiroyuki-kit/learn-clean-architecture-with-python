@@ -63,12 +63,11 @@ class TestProject:
 
         @pytest.fixture
         @classmethod
-        def fixture_task(cls, fixture_project: Project) -> Task:
+        def fixture_task(cls) -> Task:
             """テスト用のTaskを生成するフィクスチャ."""
             return Task(
                 title="Test Task",
                 description="Test Description",
-                project_id=fixture_project.id,
             )
 
         def test_add_taskでタスクが追加される(

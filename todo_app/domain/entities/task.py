@@ -5,6 +5,7 @@
 # Copyright (c) 2026 Noda Hiroyuki.
 """Taskエンティティ."""
 
+import datetime as dt
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -21,10 +22,12 @@ class Task(Entity):
 
     title: str
     description: str
-    project_id: UUID
     due_date: Deadline | None = None
     priority: Priority = Priority.MEDIUM
     status: TaskStatus = field(default=TaskStatus.TODO, init=False)
+    completed_at: dt.datetime | None = field(default=None, init=False)
+    completion_notes: str | None = field(default=None, init=False)
+    project_id: UUID | None = field(default=None, init=False)
 
     def start(self) -> None:
         """Taskを開始する.
@@ -40,7 +43,7 @@ class Task(Entity):
             raise ValueError(msg)
         self.status = TaskStatus.IN_PROGRESS
 
-    def complete(self) -> None:
+    def complete(self, notes: str | None = None) -> None:
         """Taskを完了する.
 
         Raises
@@ -53,6 +56,8 @@ class Task(Entity):
             msg = "Taskは既に完了しています。"
             raise ValueError(msg)
         self.status = TaskStatus.DONE
+        self.completed_at = dt.datetime.now(tz=dt.UTC)
+        self.completion_notes = notes
 
     def is_overdue(self) -> bool:
         """Taskの期限が過ぎているかを判定する.

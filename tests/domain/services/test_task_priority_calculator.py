@@ -5,7 +5,6 @@
 
 import datetime as dt
 from typing import Self
-from uuid import UUID
 
 import pytest
 
@@ -51,7 +50,6 @@ def test_期限に応じた優先度が返される(
     task = Task(
         title="Test Task",
         description="Test Description",
-        project_id=UUID("12345678-1234-5678-1234-567812345678"),
         due_date=Deadline(due_date) if remaining is not None else None,
     )
     if remaining is not None:
