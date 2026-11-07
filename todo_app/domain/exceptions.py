@@ -29,3 +29,12 @@ class TaskNotFoundError(DomainError):
 
 class ValidationError(DomainError):
     """ドメインの検証ルールに違反した場合に発生."""
+
+
+class ProjectNotFoundError(DomainError):
+    """存在しないプロジェクトにアクセスしようとした場合に発生."""
+
+    def __init__(self, project_id: UUID) -> None:
+        """プロジェクト ID を保持し、プロジェクトが見つからない旨を示す例外を初期化."""
+        self.project_id = project_id
+        super().__init__(f"id {project_id} のプロジェクトは見つかりません.")
