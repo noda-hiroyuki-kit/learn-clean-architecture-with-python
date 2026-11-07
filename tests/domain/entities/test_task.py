@@ -131,16 +131,34 @@ class TestTask:
             with pytest.raises(ValueError, match="Taskは既に完了しています。"):
                 fixture_task.complete()
 
-        def test_completeするとcompleted_atに完了時刻が記録される(
-            self, fixture_task: Task
-        ) -> None:
-            """completeするとcompleted_atにUTCの完了時刻が記録されることを確認する."""
-            before = dt.datetime.now(tz=dt.UTC)
-            fixture_task.complete()
-            after = dt.datetime.now(tz=dt.UTC)
-            assert fixture_task.completed_at is not None
-            assert fixture_task.completed_at.tzinfo == dt.UTC
-            assert before <= fixture_task.completed_at <= after
+        class TestCompleteするとCompletedAtに完了時刻が記録される:
+            """completeするとcompleted_atにUTCの完了時刻が記録される."""
+
+            @pytest.fixture
+            @classmethod
+            def fixture_completion(
+                cls, fixture_task: Task
+            ) -> tuple[dt.datetime, dt.datetime, dt.datetime]:
+                """completeを実行し、実行前の時刻・完了時刻・実行後の時刻を返すフィクスチャ."""
+                before = dt.datetime.now(tz=dt.UTC)
+                fixture_task.complete()
+                after = dt.datetime.now(tz=dt.UTC)
+                completed_at = fixture_task.completed_at
+                assert completed_at is not None
+                return (before, completed_at, after)
+
+            def test_completed_atがutcで記録される(
+                self, fixture_completion: tuple[dt.datetime, dt.datetime, dt.datetime]
+            ) -> None:
+                """completed_atがUTCで記録されることを確認する."""
+                assert fixture_completion[1].tzinfo == dt.UTC
+
+            def test_completed_atが実行前後の時刻の範囲内になる(
+                self, fixture_completion: tuple[dt.datetime, dt.datetime, dt.datetime]
+            ) -> None:
+                """completed_atがcomplete実行前後の時刻の範囲内になることを確認する."""
+                before, completed_at, after = fixture_completion
+                assert before <= completed_at <= after
 
         def test_notesを指定してcompleteするとcompletion_notesが設定される(
             self, fixture_task: Task
@@ -162,14 +180,23 @@ class TestTask:
             """期限を過ぎていないときはis_overdueがFalseになることを確認する."""
             assert fixture_task.is_overdue() is False
 
-        def test_期限を過ぎているときはis_overdueはTrueになる(
-            self, fixture_task_overdue: Task, monkeypatch: pytest.MonkeyPatch
-        ) -> None:
-            """期限を過ぎているときはis_overdueがTrueになることを確認する."""
+        @pytest.fixture
+        @classmethod
+        def fixture_overdue_due_date(cls, fixture_task_overdue: Task) -> dt.datetime:
+            """期限切れ判定用のTaskの期限日時を返すフィクスチャ."""
             due_date = fixture_task_overdue.due_date
             assert due_date is not None
+            return due_date.due_date
+
+        def test_期限を過ぎているときはis_overdueはTrueになる(
+            self,
+            fixture_task_overdue: Task,
+            fixture_overdue_due_date: dt.datetime,
+            monkeypatch: pytest.MonkeyPatch,
+        ) -> None:
+            """期限を過ぎているときはis_overdueがTrueになることを確認する."""
             real_datetime = dt.datetime
-            now = due_date.due_date + dt.timedelta(seconds=1)
+            now = fixture_overdue_due_date + dt.timedelta(seconds=1)
 
             class StubDatetime(real_datetime):
                 @classmethod
