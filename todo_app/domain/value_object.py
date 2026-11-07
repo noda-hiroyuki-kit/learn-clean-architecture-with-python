@@ -18,6 +18,13 @@ class TaskStatus(Enum):
     DONE = "DONE"
 
 
+class ProjectStatus(Enum):
+    """プロジェクトの進行状態を表す列挙型."""
+
+    ACTIVE = "ACTIVE"
+    COMPLETED = "COMPLETED"
+
+
 class Priority(Enum):
     """タスクの優先度を表す列挙型."""
 
