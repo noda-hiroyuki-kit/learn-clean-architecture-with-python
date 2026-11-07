@@ -10,8 +10,10 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from todo_app.domain.entities.entity import Entity
+from todo_app.domain.value_object import ProjectStatus
 
 if TYPE_CHECKING:
+    from datetime import datetime
     from uuid import UUID
 
     from todo_app.domain.entities.task import Task
@@ -23,6 +25,9 @@ class Project(Entity):
 
     name: str
     description: str = ""
+    status: ProjectStatus = field(default=ProjectStatus.ACTIVE, init=False)
+    completed_at: datetime | None = field(default=None, init=False)
+    completion_notes: str | None = field(default=None, init=False)
     _tasks: dict[UUID, Task] = field(default_factory=dict, init=False)
 
     def add_task(self, task: Task) -> None:

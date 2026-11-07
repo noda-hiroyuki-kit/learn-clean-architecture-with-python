@@ -8,6 +8,7 @@ import pytest
 
 from todo_app.domain.entities.project import Project
 from todo_app.domain.entities.task import Task
+from todo_app.domain.value_object import ProjectStatus
 
 
 class TestProject:
@@ -48,6 +49,22 @@ class TestProject:
         ) -> None:
             """descriptionが規定値で文字列長0で設定されることを確認する."""
             assert fixture_project_without_description.description == ""
+
+        def test_statusの初期値はACTIVEである(self, fixture_project: Project) -> None:
+            """statusの初期値がACTIVEであることを確認する."""
+            assert fixture_project.status is ProjectStatus.ACTIVE
+
+        def test_completed_atの初期値はNoneである(
+            self, fixture_project: Project
+        ) -> None:
+            """completed_atの初期値がNoneであることを確認する."""
+            assert fixture_project.completed_at is None
+
+        def test_completion_notesの初期値はNoneである(
+            self, fixture_project: Project
+        ) -> None:
+            """completion_notesの初期値がNoneであることを確認する."""
+            assert fixture_project.completion_notes is None
 
     class TestProjectのメソッドのテスト:
         """Projectのメソッドに関するテスト."""
