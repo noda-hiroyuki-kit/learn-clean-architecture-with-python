@@ -8,11 +8,16 @@ from uuid import uuid4
 import pytest
 
 from todo_app.application.common.result import ErrorCode
+from todo_app.application.dtos.task_dto import SetTaskPriorityRequest, TaskResponse
 from todo_app.application.repositories.task_repository import TaskRepository
-from todo_app.application.use_cases.task_use_cases import CompleteTaskUseCase
+from todo_app.application.service_ports.notifications import NotificationPort
+from todo_app.application.use_cases.task_use_cases import (
+    CompleteTaskUseCase,
+    SetTaskPriorityUseCase,
+)
 from todo_app.domain.entities.task import Task
 from todo_app.domain.exceptions import TaskNotFoundError, ValidationError
-from todo_app.domain.value_object import TaskStatus
+from todo_app.domain.value_object import Priority, TaskStatus
 
 if TYPE_CHECKING:
     import datetime as dt
@@ -53,6 +58,32 @@ class InMemoryTaskRepository(TaskRepository):
     def get_active_tasks(self) -> Sequence[Task]:
         """アクティブなTaskを取得する."""
         return [t for t in self._tasks.values() if t.status is not TaskStatus.DONE]
+
+
+class ValidationErrorTaskRepository(InMemoryTaskRepository):
+    """getで検証エラーを送出するテスト用リポジトリ."""
+
+    def get(self, task_id: UUID) -> Task:
+        """Taskの取得時に検証エラーを送出する."""
+        raise ValidationError(str(task_id))
+
+
+class SpyNotificationPort(NotificationPort):
+    """通知の呼び出しを記録するテスト用のNotificationPort実装."""
+
+    def __init__(self) -> None:
+        """通知の記録領域を初期化する."""
+        self.high_priority_tasks: list[Task] = []
+
+    def notify_task_completed(self, task: Task) -> None:
+        """タスク完了通知を何もしない."""
+
+    def notify_task_high_priority(self, task: Task) -> None:
+        """高優先度タスクの通知を記録する."""
+        self.high_priority_tasks.append(task)
+
+    def notify_task_deadline_approaching(self, task: Task, days_remaining: int) -> None:
+        """期限通知を何もしない."""
 
 
 class ValidationErrorTask(Task):
@@ -288,3 +319,211 @@ class TestCompleteTaskUseCase:
                 ValueError, match="完了したTaskにcompleted_atが設定されていません。"
             ):
                 use_case.execute(task.id)
+
+
+class TestSetTaskPriorityUseCase:
+    """SetTaskPriorityUseCaseのテスト."""
+
+    class Test高優先度を設定すると通知される:
+        """高優先度を設定してTaskを保存し、通知する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_repository(cls) -> InMemoryTaskRepository:
+            """テスト用のリポジトリを生成するフィクスチャ."""
+            return InMemoryTaskRepository()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_task(cls, fixture_repository: InMemoryTaskRepository) -> Task:
+            """リポジトリに保存済みのTaskを生成するフィクスチャ."""
+            task = Task(title="Test Task", description="Test Description")
+            fixture_repository.save(task)
+            fixture_repository.saved_tasks.clear()
+            return task
+
+        @pytest.fixture
+        @classmethod
+        def fixture_notification_port(cls) -> SpyNotificationPort:
+            """通知の呼び出しを記録するフィクスチャ."""
+            return SpyNotificationPort()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls,
+            fixture_repository: InMemoryTaskRepository,
+            fixture_task: Task,
+            fixture_notification_port: SpyNotificationPort,
+        ) -> Result:
+            """高優先度への変更を実行した結果を返す."""
+            use_case = SetTaskPriorityUseCase(
+                task_repository=fixture_repository,
+                notification_service=fixture_notification_port,
+            )
+            request = SetTaskPriorityRequest(
+                task_id=str(fixture_task.id), priority="HIGH"
+            )
+            return use_case.execute(request)
+
+        def test_実行が成功する(self, fixture_result: Result) -> None:
+            """ユースケースの実行が成功することを確認する."""
+            assert fixture_result.is_success is True
+
+        def test_taskの優先度が更新される(
+            self, fixture_task: Task, fixture_result: Result
+        ) -> None:
+            """Taskの優先度がHIGHに更新されることを確認する."""
+            assert (
+                fixture_result.is_success,
+                fixture_task.priority,
+            ) == (True, Priority.HIGH)
+
+        def test_taskがリポジトリに保存される(
+            self,
+            fixture_repository: InMemoryTaskRepository,
+            fixture_task: Task,
+            fixture_result: Result,
+        ) -> None:
+            """更新されたTaskがリポジトリに保存されることを確認する."""
+            assert (fixture_result.is_success, fixture_repository.saved_tasks) == (
+                True,
+                [fixture_task],
+            )
+
+        def test高優先度の通知が送信される(
+            self,
+            fixture_notification_port: SpyNotificationPort,
+            fixture_task: Task,
+            fixture_result: Result,
+        ) -> None:
+            """高優先度を設定したTaskの通知が送信されることを確認する."""
+            assert (
+                fixture_result.is_success,
+                fixture_notification_port.high_priority_tasks,
+            ) == (True, [fixture_task])
+
+        def test_task_responseが返される(
+            self, fixture_result: Result, fixture_task: Task
+        ) -> None:
+            """成功値に更新後のTaskResponseが含まれることを確認する."""
+            assert fixture_result.value == TaskResponse.from_entity(fixture_task)
+
+    class Test高優先度以外では通知されない:
+        """高優先度以外に設定した場合は通知しない."""
+
+        @pytest.mark.parametrize(
+            ("priority", "expected_priority"),
+            [("LOW", Priority.LOW), ("MEDIUM", Priority.MEDIUM)],
+        )
+        def test_優先度が更新され通知されない(
+            self, priority: str, expected_priority: Priority
+        ) -> None:
+            """高優先度以外への変更は保存され、通知されないことを確認する."""
+            repository = InMemoryTaskRepository()
+            task = Task(title="Test Task", description="Test Description")
+            repository.save(task)
+            repository.saved_tasks.clear()
+            notification_port = SpyNotificationPort()
+            use_case = SetTaskPriorityUseCase(repository, notification_port)
+
+            result = use_case.execute(
+                SetTaskPriorityRequest(task_id=str(task.id), priority=priority)
+            )
+
+            assert (
+                result.is_success,
+                task.priority,
+                repository.saved_tasks,
+                notification_port.high_priority_tasks,
+            ) == (True, expected_priority, [task], [])
+
+    class Test存在しないtaskの場合は失敗する:
+        """存在しないTaskを指定した場合は失敗結果が返る."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_task_id(cls) -> UUID:
+            """存在しないTaskのidを生成する."""
+            return uuid4()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(cls, fixture_task_id: UUID) -> Result:
+            """空のリポジトリでユースケースを実行した結果を返す."""
+            use_case = SetTaskPriorityUseCase(
+                task_repository=InMemoryTaskRepository(),
+                notification_service=SpyNotificationPort(),
+            )
+            request = SetTaskPriorityRequest(
+                task_id=str(fixture_task_id), priority="HIGH"
+            )
+            return use_case.execute(request)
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """実行結果からerrorを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_実行が失敗する(self, fixture_result: Result) -> None:
+            """ユースケースの実行が失敗することを確認する."""
+            assert fixture_result.is_success is False
+
+        def test_errorのcodeがnot_foundになる(self, fixture_error: Error) -> None:
+            """Error codeがNOT_FOUNDになることを確認する."""
+            assert fixture_error.code is ErrorCode.NOT_FOUND
+
+        def test_errorのmessageにtask_idが含まれる(
+            self, fixture_error: Error, fixture_task_id: UUID
+        ) -> None:
+            """Error messageにTaskのidが含まれることを確認する."""
+            assert str(fixture_task_id) in fixture_error.message
+
+    class Test検証エラーの場合は失敗する:
+        """リポジトリが検証エラーを送出した場合は失敗結果が返る."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_task_id(cls) -> UUID:
+            """テスト用のTask IDを生成する."""
+            return uuid4()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(cls, fixture_task_id: UUID) -> Result:
+            """検証エラーを送出するリポジトリで実行した結果を返す."""
+            use_case = SetTaskPriorityUseCase(
+                task_repository=ValidationErrorTaskRepository(),
+                notification_service=SpyNotificationPort(),
+            )
+            request = SetTaskPriorityRequest(
+                task_id=str(fixture_task_id), priority="HIGH"
+            )
+            return use_case.execute(request)
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """実行結果からerrorを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_実行が失敗する(self, fixture_result: Result) -> None:
+            """ユースケースの実行が失敗することを確認する."""
+            assert fixture_result.is_success is False
+
+        def test_errorのcodeがvalidation_errorになる(
+            self, fixture_error: Error
+        ) -> None:
+            """Error codeがVALIDATION_ERRORになることを確認する."""
+            assert fixture_error.code is ErrorCode.VALIDATION_ERROR
+
+        def test_errorのmessageが保持される(
+            self, fixture_error: Error, fixture_task_id: UUID
+        ) -> None:
+            """例外のメッセージがErrorに保持されることを確認する."""
+            assert fixture_error.message == str(fixture_task_id)
