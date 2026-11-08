@@ -15,8 +15,7 @@ from todo_app.application.service_ports.notifications import NotificationPort
 from todo_app.domain.exceptions import ProjectNotFoundError, ValidationError
 
 if TYPE_CHECKING:
-    from uuid import UUID
-
+    from todo_app.application.dtos.project_dto import CompleteProjectRequest
     from todo_app.application.repositories.project_repository import ProjectRepository
     from todo_app.application.repositories.task_repository import TaskRepository
     from todo_app.application.service_ports.notifications import (
@@ -32,15 +31,13 @@ class CompleteProjectUseCase:
     task_repository: TaskRepository
     notification_service: NotificationPort
 
-    def execute(self, project_id: UUID, completion_notes: str | None = None) -> Result:
+    def execute(self, request: CompleteProjectRequest) -> Result:
         """プロジェクトを完了する.
 
         Parameters
         ----------
-        project_id : UUID
-            完了するプロジェクトの一意な識別子.
-        completion_notes : str | None, optional
-            完了時のメモ, by default None
+        request : CompleteProjectRequest
+            プロジェクト完了リクエスト.
 
         Returns
         -------
@@ -49,8 +46,10 @@ class CompleteProjectUseCase:
 
         """
         try:
+            params = request.to_execution_params()
+
             # Validate project exists
-            project = self.project_repository.get(project_id)
+            project = self.project_repository.get(params["project_id"])
 
             # Complete all outstanding tasks
             for task in project.incomplete_tasks:
@@ -59,7 +58,7 @@ class CompleteProjectUseCase:
                 self.notification_service.notify_task_completed(task)
 
             # Complete the project itself
-            project.mark_completed(notes=completion_notes)
+            project.mark_completed(notes=params["completion_notes"])
             self.project_repository.save(project)
 
             return Result.success(
@@ -73,6 +72,6 @@ class CompleteProjectUseCase:
             )
 
         except ProjectNotFoundError:
-            return Result.failure(Error.not_found("Project", str(project_id)))
+            return Result.failure(Error.not_found("Project", request.project_id))
         except ValidationError as e:
             return Result.failure(Error.validation_error(str(e)))

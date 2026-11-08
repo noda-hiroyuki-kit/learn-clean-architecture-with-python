@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 
 from todo_app.application.common.result import ErrorCode
+from todo_app.application.dtos.project_dto import CompleteProjectRequest
 from todo_app.application.repositories.project_repository import ProjectRepository
 from todo_app.application.repositories.task_repository import TaskRepository
 from todo_app.application.service_ports.notifications import NotificationPort
@@ -186,7 +187,10 @@ class TestCompleteProjectUseCase:
                 task_repository=fixture_task_repository,
                 notification_service=fixture_notification_port,
             )
-            return use_case.execute(fixture_project.id, completion_notes="完了メモ")
+            request = CompleteProjectRequest(
+                project_id=str(fixture_project.id), completion_notes="完了メモ"
+            )
+            return use_case.execute(request)
 
         @pytest.fixture
         @classmethod
@@ -290,7 +294,7 @@ class TestCompleteProjectUseCase:
                 task_repository=InMemoryTaskRepository(),
                 notification_service=SpyNotificationPort(),
             )
-            return use_case.execute(project.id)
+            return use_case.execute(CompleteProjectRequest(project_id=str(project.id)))
 
         def test_実行が成功する(self, fixture_result: Result) -> None:
             """ユースケースの実行が成功することを確認する."""
@@ -320,7 +324,9 @@ class TestCompleteProjectUseCase:
                 task_repository=InMemoryTaskRepository(),
                 notification_service=SpyNotificationPort(),
             )
-            return use_case.execute(fixture_project_id)
+            return use_case.execute(
+                CompleteProjectRequest(project_id=str(fixture_project_id))
+            )
 
         @pytest.fixture
         @classmethod
@@ -363,7 +369,7 @@ class TestCompleteProjectUseCase:
                 task_repository=InMemoryTaskRepository(),
                 notification_service=SpyNotificationPort(),
             )
-            return use_case.execute(project.id)
+            return use_case.execute(CompleteProjectRequest(project_id=str(project.id)))
 
         @pytest.fixture
         @classmethod
