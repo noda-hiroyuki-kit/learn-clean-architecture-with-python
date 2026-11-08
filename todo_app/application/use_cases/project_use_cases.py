@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from todo_app.application.common.result import Error, Result
+from todo_app.application.dtos.project_dto import CompleteProjectResponse
 from todo_app.application.repositories.project_repository import ProjectRepository
 from todo_app.application.repositories.task_repository import TaskRepository
 from todo_app.application.service_ports.notifications import NotificationPort
@@ -50,8 +51,9 @@ class CompleteProjectUseCase:
 
             # Validate project exists
             project = self.project_repository.get(params["project_id"])
+            project.mark_completed(notes=params["completion_notes"])
 
-            # Complete all outstanding tasks
+            # 未完了タスクをすべて完了にする
             for task in project.incomplete_tasks:
                 task.complete()
                 self.task_repository.save(task)
@@ -60,18 +62,10 @@ class CompleteProjectUseCase:
             # Complete the project itself
             project.mark_completed(notes=params["completion_notes"])
             self.project_repository.save(project)
-
-            return Result.success(
-                {
-                    "id": str(project.id),
-                    "status": project.status,
-                    "completion_date": project.completed_at,
-                    "task_count": len(project.tasks),
-                    "completion_notes": project.completion_notes,
-                }
-            )
+            response = CompleteProjectResponse.from_entity(project)
+            return Result.success(response)
 
         except ProjectNotFoundError:
-            return Result.failure(Error.not_found("Project", request.project_id))
+            return Result.failure(Error.not_found("Project", str(params["project_id"])))
         except ValidationError as e:
             return Result.failure(Error.validation_error(str(e)))

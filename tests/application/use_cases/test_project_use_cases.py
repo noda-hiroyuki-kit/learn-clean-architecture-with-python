@@ -8,7 +8,10 @@ from uuid import uuid4
 import pytest
 
 from todo_app.application.common.result import ErrorCode
-from todo_app.application.dtos.project_dto import CompleteProjectRequest
+from todo_app.application.dtos.project_dto import (
+    CompleteProjectRequest,
+    CompleteProjectResponse,
+)
 from todo_app.application.repositories.project_repository import ProjectRepository
 from todo_app.application.repositories.task_repository import TaskRepository
 from todo_app.application.service_ports.notifications import NotificationPort
@@ -23,6 +26,7 @@ from todo_app.domain.exceptions import (
 from todo_app.domain.value_object import ProjectStatus, TaskStatus
 
 if TYPE_CHECKING:
+    import datetime as dt
     from collections.abc import Sequence
     from uuid import UUID
 
@@ -121,6 +125,14 @@ class ValidationErrorTask(Task):
 class TestCompleteProjectUseCase:
     """CompleteProjectUseCaseのテスト."""
 
+    @pytest.fixture
+    @classmethod
+    def fixture_response(cls, fixture_result: Result) -> CompleteProjectResponse:
+        """実行結果からCompleteProjectResponseを取り出すフィクスチャ."""
+        response = fixture_result.value
+        assert isinstance(response, CompleteProjectResponse)
+        return response
+
     class Test未完了タスクがあるプロジェクトを完了できる:
         """未完了タスクがあるプロジェクトを完了できる."""
 
@@ -201,40 +213,51 @@ class TestCompleteProjectUseCase:
             assert fixture_result.is_success is True
             return fixture_project
 
+        @pytest.fixture
+        @classmethod
+        def fixture_completed_at(
+            cls, fixture_completed_project: Project
+        ) -> dt.datetime:
+            """完了済みProjectの完了時刻を返すフィクスチャ."""
+            completed_at = fixture_completed_project.completed_at
+            assert completed_at is not None
+            return completed_at
+
         def test_実行が成功する(self, fixture_result: Result) -> None:
             """ユースケースの実行が成功することを確認する."""
             assert fixture_result.is_success is True
 
         def test_valueにprojectのidが設定される(
-            self, fixture_result: Result, fixture_project: Project
+            self, fixture_response: CompleteProjectResponse, fixture_project: Project
         ) -> None:
             """valueにProjectのidが文字列で設定されることを確認する."""
-            assert fixture_result.value["id"] == str(fixture_project.id)
+            assert fixture_response.id == str(fixture_project.id)
 
-        def test_valueのstatusがcompletedになる(self, fixture_result: Result) -> None:
-            """valueのstatusがCOMPLETEDになることを確認する."""
-            assert fixture_result.value["status"] is ProjectStatus.COMPLETED
+        def test_valueのstatusがcompletedになる(
+            self, fixture_response: CompleteProjectResponse
+        ) -> None:
+            """valueのstatusが文字列のCOMPLETEDになることを確認する."""
+            assert fixture_response.status == ProjectStatus.COMPLETED.value
 
         def test_valueのcompletion_dateが完了時刻になる(
-            self, fixture_result: Result, fixture_completed_project: Project
+            self,
+            fixture_response: CompleteProjectResponse,
+            fixture_completed_at: dt.datetime,
         ) -> None:
-            """valueのcompletion_dateがProjectの完了時刻になることを確認する."""
-            assert (
-                fixture_result.value["completion_date"]
-                == fixture_completed_project.completed_at
-            )
+            """valueのcompletion_dateがProjectの完了時刻のISO形式になることを確認する."""
+            assert fixture_response.completion_date == fixture_completed_at.isoformat()
 
         def test_valueのtask_countがタスク数になる(
-            self, fixture_result: Result
+            self, fixture_response: CompleteProjectResponse
         ) -> None:
             """valueのtask_countがProjectのタスク数になることを確認する."""
-            assert fixture_result.value["task_count"] == 2  # noqa: PLR2004
+            assert fixture_response.task_count == 2  # noqa: PLR2004
 
         def test_valueのcompletion_notesが設定される(
-            self, fixture_result: Result
+            self, fixture_response: CompleteProjectResponse
         ) -> None:
             """valueのcompletion_notesに指定したnotesが設定されることを確認する."""
-            assert fixture_result.value["completion_notes"] == "完了メモ"
+            assert fixture_response.completion_notes == "完了メモ"
 
         def test_projectのstatusがcompletedになる(
             self, fixture_completed_project: Project
@@ -301,10 +324,10 @@ class TestCompleteProjectUseCase:
             assert fixture_result.is_success is True
 
         def test_valueのcompletion_notesはnoneのまま(
-            self, fixture_result: Result
+            self, fixture_response: CompleteProjectResponse
         ) -> None:
             """valueのcompletion_notesがNoneのままであることを確認する."""
-            assert fixture_result.value["completion_notes"] is None
+            assert fixture_response.completion_notes is None
 
     class Test存在しないprojectの場合は失敗する:
         """存在しないProjectを指定した場合は失敗結果が返る."""
