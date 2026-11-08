@@ -6,9 +6,13 @@
 """アプリケーション層のための Project データ転送オブジェクト."""
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Self
 from uuid import UUID
 
 from todo_app.domain.exceptions import ValidationError
+
+if TYPE_CHECKING:
+    from todo_app.domain.entities.project import Project
 
 MSG_MAX_LENGTH = 1000
 
@@ -36,3 +40,28 @@ class CompleteProjectRequest:
             "project_id": UUID(self.project_id),
             "completion_notes": self.completion_notes,
         }
+
+
+@dataclass(frozen=True)
+class CompleteProjectResponse:
+    """プロジェクト完了のレスポンス用のデータ構造."""
+
+    id: str
+    status: str
+    completion_date: str
+    task_count: int
+    completion_notes: str | None
+
+    @classmethod
+    def from_entity(cls, project: Project) -> Self:
+        """ドメインエンティティからレスポンスを生成."""
+        if project.completed_at is None:
+            msg = "プロジェクトは完了していません"
+            raise ValueError(msg)
+        return cls(
+            id=str(project.id),
+            status=project.status.value,
+            completion_date=project.completed_at.isoformat(),
+            task_count=len(project.tasks),
+            completion_notes=project.completion_notes,
+        )
