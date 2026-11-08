@@ -20,6 +20,8 @@
         "dmypy",
         "docstrings",
         "doctests",
+        "dto",
+        "dtos",
         "EDITMSG",
         "envrc",
         "Hiroyuki",
