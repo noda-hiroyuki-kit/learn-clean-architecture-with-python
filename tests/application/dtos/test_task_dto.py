@@ -3,14 +3,129 @@
 """Taskデータ転送オブジェクトのテスト."""
 
 from dataclasses import FrozenInstanceError
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
 
-from todo_app.application.dtos.task_dto import SetTaskPriorityRequest
-from todo_app.domain.value_object import Priority
+from todo_app.application.dtos.task_dto import SetTaskPriorityRequest, TaskResponse
+from todo_app.domain.entities.task import Task
+from todo_app.domain.value_object import Deadline, Priority, TaskStatus
 
 TASK_ID = "12345678-1234-5678-1234-567812345678"
+PROJECT_ID = "87654321-4321-8765-4321-876543218765"
+
+
+class TestTaskResponse:
+    """TaskResponseのテスト."""
+
+    class TestFromEntityでレスポンスに変換できる:
+        """from_entityでTaskをレスポンスに変換できる."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_response(cls) -> TaskResponse:
+            """全フィールドを設定したTaskのレスポンスを返す."""
+            due_date = datetime(2026, 12, 31, 12, tzinfo=UTC)
+            completed_at = datetime(2026, 11, 1, 10, tzinfo=UTC)
+            task = Task(
+                title="テストタスク",
+                description="タスクの説明",
+                due_date=Deadline(due_date),
+                priority=Priority.HIGH,
+            )
+            task.id = UUID(TASK_ID)
+            task.project_id = UUID(PROJECT_ID)
+            task.status = TaskStatus.DONE
+            task.completed_at = completed_at
+            task.completion_notes = "完了メモ"
+            return TaskResponse.from_entity(task)
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_response_without_optional_fields(cls) -> TaskResponse:
+            """任意フィールドのないTaskのレスポンスを返す."""
+            task = Task(title="タスク", description="説明")
+            return TaskResponse.from_entity(task)
+
+        def test_idが文字列に変換される(self, fixture_response: TaskResponse) -> None:
+            """TaskのUUIDが文字列に変換されることを確認する."""
+            assert fixture_response.id == TASK_ID
+
+        def test_titleが設定される(self, fixture_response: TaskResponse) -> None:
+            """titleがレスポンスに設定されることを確認する."""
+            assert fixture_response.title == "テストタスク"
+
+        def test_descriptionが設定される(self, fixture_response: TaskResponse) -> None:
+            """descriptionがレスポンスに設定されることを確認する."""
+            assert fixture_response.description == "タスクの説明"
+
+        def test_statusが設定される(self, fixture_response: TaskResponse) -> None:
+            """statusがレスポンスに設定されることを確認する."""
+            assert fixture_response.status == TaskStatus.DONE
+
+        def test_priorityが設定される(self, fixture_response: TaskResponse) -> None:
+            """priorityがレスポンスに設定されることを確認する."""
+            assert fixture_response.priority == Priority.HIGH
+
+        def test_due_dateが設定される(self, fixture_response: TaskResponse) -> None:
+            """期限日時がレスポンスに設定されることを確認する."""
+            assert fixture_response.due_date == datetime(2026, 12, 31, 12, tzinfo=UTC)
+
+        def test_project_idが文字列に変換される(
+            self, fixture_response: TaskResponse
+        ) -> None:
+            """project_idのUUIDが文字列に変換されることを確認する."""
+            assert fixture_response.project_id == PROJECT_ID
+
+        def test_completion_dateが設定される(
+            self, fixture_response: TaskResponse
+        ) -> None:
+            """完了日時がレスポンスに設定されることを確認する."""
+            assert fixture_response.completion_date == datetime(
+                2026, 11, 1, 10, tzinfo=UTC
+            )
+
+        def test_completion_notesが設定される(
+            self, fixture_response: TaskResponse
+        ) -> None:
+            """完了メモがレスポンスに設定されることを確認する."""
+            assert fixture_response.completion_notes == "完了メモ"
+
+        def test任意フィールドがない場合はnoneになる(
+            self, fixture_response_without_optional_fields: TaskResponse
+        ) -> None:
+            """任意フィールドがない場合はNoneに変換されることを確認する."""
+            response = fixture_response_without_optional_fields
+            assert (
+                response.due_date,
+                response.project_id,
+                response.completion_date,
+                response.completion_notes,
+            ) == (None, None, None, None)
+
+        @pytest.mark.parametrize(
+            "field_name",
+            [
+                "id",
+                "title",
+                "description",
+                "status",
+                "priority",
+                "due_date",
+                "project_id",
+                "completion_date",
+                "completion_notes",
+            ],
+        )
+        def testフィールドを変更できない(
+            self, fixture_response: TaskResponse, field_name: str
+        ) -> None:
+            """レスポンスの各フィールドが変更できないことを確認する."""
+            with pytest.raises(FrozenInstanceError, match=field_name):
+                setattr(
+                    fixture_response, field_name, getattr(fixture_response, field_name)
+                )
 
 
 class TestSetTaskPriorityRequest:

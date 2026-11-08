@@ -6,9 +6,15 @@
 """アプリケーション層のための Task データ転送オブジェクト."""
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Self
 from uuid import UUID
 
-from todo_app.domain.value_object import Priority
+from todo_app.domain.value_object import Priority, TaskStatus
+
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    from todo_app.domain.entities.task import Task
 
 
 def _normalize_priority(priority: str) -> str:
@@ -17,6 +23,36 @@ def _normalize_priority(priority: str) -> str:
     if not priority_value or priority_value not in [p.name for p in Priority]:
         raise ValueError
     return priority_value
+
+
+@dataclass(frozen=True)
+class TaskResponse:
+    """Taskのレスポンスデータ."""
+
+    id: str  # UUID conversion needed for boundary crossing
+    title: str
+    description: str
+    status: TaskStatus
+    priority: Priority
+    due_date: datetime | None = None
+    project_id: str | None = None
+    completion_date: datetime | None = None
+    completion_notes: str | None = None
+
+    @classmethod
+    def from_entity(cls, task: Task) -> Self:
+        """taskエンティティからレスポンスを作成する."""
+        return cls(
+            id=str(task.id),  # Basic conversion for boundary crossing
+            title=task.title,
+            description=task.description,
+            status=task.status,
+            priority=task.priority,
+            due_date=task.due_date.due_date if task.due_date else None,
+            project_id=str(task.project_id) if task.project_id else None,
+            completion_date=task.completed_at,
+            completion_notes=task.completion_notes,
+        )
 
 
 @dataclass(frozen=True)
