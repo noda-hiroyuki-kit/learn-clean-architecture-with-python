@@ -9,10 +9,10 @@ dev = [
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
     "pytest-randomly>=5.0.0",
-    "ruff>=0.17.3",
-    "tox>=4.67.5",
-    "tox-uv>=1.37.2",
-    "ty>=0.0.95",
+    "ruff>=0.17.4",
+    "tox>=4.67.13",
+    "tox-uv>=1.37.7",
+    "ty>=0.0.99",
 ]
 
 [tool.ruff]
@@ -152,7 +152,7 @@ skip_install = true
 commands = [
     ["uv", "python", "upgrade", "3.14"],
     ["uv", "python", "upgrade", "3.15"],
-    ["prek", "update", "--cooldown-days", "10"],
+    ["prek", "update"],
     ["uv", "lock", "-U"],
     ["uv", "sync"],
 ]
@@ -174,7 +174,7 @@ commands = [
 ]
 
 [tool.pytest]
-minversion = "9.1.1"
+minversion = "9.2.0"
 addopts = ["-v", "-s", "--strict-markers", "--cov", "--cov-report=html", "--cov-report=term"]
 pythonpath = ["todo_app"]
 testpaths = [
