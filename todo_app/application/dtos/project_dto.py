@@ -9,9 +9,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Self
 from uuid import UUID
 
+from todo_app.application.dtos.task_dto import TaskResponse
 from todo_app.domain.exceptions import ValidationError
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from datetime import datetime
+
     from todo_app.domain.entities.project import Project
 
 MSG_MAX_LENGTH = 1000
@@ -55,6 +59,30 @@ class CompleteProjectRequest:
             "project_id": UUID(self.project_id),
             "completion_notes": self.completion_notes,
         }
+
+
+@dataclass(frozen=True)
+class ProjectResponse:
+    """プロジェクトのレスポンス用のデータ構造."""
+
+    id: str
+    name: str
+    description: str
+    status: str
+    completed_date: datetime | None
+    tasks: Sequence[TaskResponse]
+
+    @classmethod
+    def from_entity(cls, project: Project) -> Self:
+        """ドメインエンティティからレスポンスを生成."""
+        return cls(
+            id=str(project.id),
+            name=project.name,
+            description=project.description,
+            status=project.status.value,
+            completed_date=project.completed_at or None,
+            tasks=[TaskResponse.from_entity(t) for t in project.tasks],
+        )
 
 
 @dataclass(frozen=True)

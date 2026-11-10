@@ -14,7 +14,9 @@ from todo_app.application.dtos.project_dto import (
     CompleteProjectRequest,
     CompleteProjectResponse,
     CreateProjectRequest,
+    ProjectResponse,
 )
+from todo_app.application.dtos.task_dto import TaskResponse
 from todo_app.domain.entities.project import Project
 from todo_app.domain.entities.task import Task
 from todo_app.domain.exceptions import ValidationError
@@ -200,6 +202,115 @@ class TestCompleteProjectRequest:
                 ValueError, match="badly formed hexadecimal UUID string"
             ):
                 request.to_execution_params()
+
+
+class TestProjectResponse:
+    """ProjectResponseのテスト."""
+
+    class TestFromEntityでレスポンスに変換できる:
+        """from_entityでプロジェクトをレスポンスに変換できる."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_project(cls) -> Project:
+            """タスクと完了日時を設定したプロジェクトを返す."""
+            project = Project(
+                name="テストプロジェクト", description="プロジェクトの説明"
+            )
+            project.id = UUID(PROJECT_ID)
+            project.add_task(Task(title="タスク1", description="説明1"))
+            project.add_task(Task(title="タスク2", description="説明2"))
+            project.mark_completed(notes="完了メモ")
+            project.completed_at = dt.datetime(
+                2026, 11, 1, 10, 20, 30, 123456, tzinfo=dt.UTC
+            )
+            return project
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_response(cls, fixture_project: Project) -> ProjectResponse:
+            """テスト用プロジェクトから生成したレスポンスを返す."""
+            return ProjectResponse.from_entity(fixture_project)
+
+        def test_idが文字列に変換される(
+            self, fixture_response: ProjectResponse
+        ) -> None:
+            """プロジェクトのUUIDが文字列に変換されることを確認する."""
+            assert fixture_response.id == PROJECT_ID
+
+        def test_nameが設定される(self, fixture_response: ProjectResponse) -> None:
+            """プロジェクト名が設定されることを確認する."""
+            assert fixture_response.name == "テストプロジェクト"
+
+        def test_descriptionが設定される(
+            self, fixture_response: ProjectResponse
+        ) -> None:
+            """プロジェクトの説明が設定されることを確認する."""
+            assert fixture_response.description == "プロジェクトの説明"
+
+        def test_statusが列挙型の値に変換される(
+            self, fixture_response: ProjectResponse
+        ) -> None:
+            """完了状態が列挙型の文字列値に変換されることを確認する."""
+            assert fixture_response.status == "COMPLETED"
+
+        def test_completed_dateが日時のまま保持される(
+            self, fixture_response: ProjectResponse
+        ) -> None:
+            """完了日時がタイムゾーンとマイクロ秒を含めて保持される."""
+            assert fixture_response.completed_date == dt.datetime(
+                2026, 11, 1, 10, 20, 30, 123456, tzinfo=dt.UTC
+            )
+
+        def test_tasksが追加順にtask_responseへ変換される(
+            self, fixture_response: ProjectResponse, fixture_project: Project
+        ) -> None:
+            """全タスクが追加順を保持してTaskResponseに変換される."""
+            assert fixture_response.tasks == [
+                TaskResponse.from_entity(task) for task in fixture_project.tasks
+            ]
+
+        @pytest.mark.parametrize(
+            "field_name",
+            ["id", "name", "description", "status", "completed_date", "tasks"],
+        )
+        def test_フィールドを変更できない(
+            self, fixture_response: ProjectResponse, field_name: str
+        ) -> None:
+            """レスポンスの各フィールドを再代入できないことを確認する."""
+            with pytest.raises(FrozenInstanceError, match=field_name):
+                setattr(
+                    fixture_response, field_name, getattr(fixture_response, field_name)
+                )
+
+    class Test未完了でタスクのないプロジェクトを変換できる:
+        """未完了で任意データのないプロジェクトも変換できる."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_response(cls) -> ProjectResponse:
+            """説明を省略した未完了プロジェクトのレスポンスを返す."""
+            return ProjectResponse.from_entity(Project(name="未完了プロジェクト"))
+
+        def test_statusがactiveになる(self, fixture_response: ProjectResponse) -> None:
+            """未完了プロジェクトのstatusがACTIVEになることを確認する."""
+            assert fixture_response.status == "ACTIVE"
+
+        def test_completed_dateがnoneになる(
+            self, fixture_response: ProjectResponse
+        ) -> None:
+            """完了日時が未設定の場合はNoneになることを確認する."""
+            assert fixture_response.completed_date is None
+
+        def test_tasksが空リストになる(self, fixture_response: ProjectResponse) -> None:
+            """タスクがない場合は空リストになることを確認する."""
+            assert fixture_response.tasks == []
+
+        def test_descriptionが空文字になる(
+            self, fixture_response: ProjectResponse
+        ) -> None:
+            """省略した説明が空文字として保持されることを確認する."""
+            assert fixture_response.description == ""
 
 
 class TestCompleteProjectResponse:
