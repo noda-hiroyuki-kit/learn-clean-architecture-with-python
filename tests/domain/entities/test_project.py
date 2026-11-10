@@ -7,8 +7,13 @@ from uuid import UUID
 
 import pytest
 
-from todo_app.domain.entities.project import Project
+from todo_app.domain.entities.project import (
+    DESCRIPTION_MAX_LENGTH,
+    NAME_MAX_LENGTH,
+    Project,
+)
 from todo_app.domain.entities.task import Task
+from todo_app.domain.exceptions import ValidationError
 from todo_app.domain.value_object import ProjectStatus
 
 if TYPE_CHECKING:
@@ -69,6 +74,48 @@ class TestProject:
         ) -> None:
             """completion_notesの初期値がNoneであることを確認する."""
             assert fixture_project.completion_notes is None
+
+        def test_最大長ちょうどのnameで生成できる(self) -> None:
+            """最大長ちょうどのnameが許容されることを確認する."""
+            name = "名" * NAME_MAX_LENGTH
+            project = Project(name=name)
+            assert project.name == name
+
+        def test_最大長ちょうどのdescriptionで生成できる(self) -> None:
+            """最大長ちょうどのdescriptionが許容されることを確認する."""
+            description = "説" * DESCRIPTION_MAX_LENGTH
+            project = Project(name="プロジェクト名", description=description)
+            assert project.description == description
+
+    class Test検証エラーになる:
+        """不正なプロジェクトデータの場合はValidationErrorが送出される."""
+
+        @pytest.mark.parametrize("name", ["", "   ", "\t\n", "\u3000"])
+        def test_nameが空の場合はvalidation_errorになる(self, name: str) -> None:
+            """nameが空または空白のみの場合はValidationErrorになる."""
+            with pytest.raises(ValidationError, match=r"^プロジェクト名が必要です$"):
+                Project(name=name)
+
+        def test_nameが最大長を超える場合はvalidation_errorになる(self) -> None:
+            """nameが最大長を超える場合はValidationErrorになる."""
+            with pytest.raises(
+                ValidationError,
+                match=f"^プロジェクト名は{NAME_MAX_LENGTH}文字以下としてください$",
+            ):
+                Project(name="名" * (NAME_MAX_LENGTH + 1))
+
+        def test_descriptionが最大長を超える場合はvalidation_errorになる(
+            self,
+        ) -> None:
+            """descriptionが最大長を超える場合はValidationErrorになる."""
+            with pytest.raises(
+                ValidationError,
+                match=f"^説明は{DESCRIPTION_MAX_LENGTH}文字以下としてください$",
+            ):
+                Project(
+                    name="プロジェクト名",
+                    description="説" * (DESCRIPTION_MAX_LENGTH + 1),
+                )
 
     class TestProjectのメソッドのテスト:
         """Projectのメソッドに関するテスト."""

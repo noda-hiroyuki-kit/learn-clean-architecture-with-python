@@ -13,6 +13,7 @@ from todo_app.application.dtos.project_dto import (
     MSG_MAX_LENGTH,
     CompleteProjectRequest,
     CompleteProjectResponse,
+    CreateProjectRequest,
 )
 from todo_app.domain.entities.project import Project
 from todo_app.domain.entities.task import Task
@@ -22,6 +23,85 @@ if TYPE_CHECKING:
     from typing import Any
 
 PROJECT_ID = "12345678-1234-5678-1234-567812345678"
+
+
+class TestCreateProjectRequest:
+    """CreateProjectRequestのテスト."""
+
+    class Test正しく生成される:
+        """CreateProjectRequestが正しく生成される."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_request(cls) -> CreateProjectRequest:
+            """テスト用のCreateProjectRequestを生成する."""
+            return CreateProjectRequest(
+                name="プロジェクト名", description="プロジェクトの説明"
+            )
+
+        def test_nameが設定される(self, fixture_request: CreateProjectRequest) -> None:
+            """nameが設定されることを確認する."""
+            assert fixture_request.name == "プロジェクト名"
+
+        def test_descriptionが設定される(
+            self, fixture_request: CreateProjectRequest
+        ) -> None:
+            """descriptionが設定されることを確認する."""
+            assert fixture_request.description == "プロジェクトの説明"
+
+        def test_descriptionを省略すると空文字になる(self) -> None:
+            """descriptionを省略すると空文字になることを確認する."""
+            request = CreateProjectRequest(name="プロジェクト名")
+            assert request.description == ""
+
+        @pytest.mark.parametrize("field_name", ["name", "description"])
+        def test_フィールドを変更できない(
+            self, fixture_request: CreateProjectRequest, field_name: str
+        ) -> None:
+            """リクエストの各フィールドが変更できないことを確認する."""
+            with pytest.raises(FrozenInstanceError, match=field_name):
+                setattr(
+                    fixture_request, field_name, getattr(fixture_request, field_name)
+                )
+
+    class TestToExecutionParamsでユースケース用のパラメータに変換できる:
+        """to_execution_paramsで前後の空白を除去したパラメータに変換できる."""
+
+        @pytest.mark.parametrize(
+            ("name", "description", "expected"),
+            [
+                (
+                    "プロジェクト名",
+                    "プロジェクトの説明",
+                    {"name": "プロジェクト名", "description": "プロジェクトの説明"},
+                ),
+                (
+                    " \tプロジェクト 名\u3000",
+                    "\n プロジェクトの 説明 \t",
+                    {"name": "プロジェクト 名", "description": "プロジェクトの 説明"},
+                ),
+                ("プロジェクト名", "", {"name": "プロジェクト名", "description": ""}),
+                (
+                    "プロジェクト名",
+                    " \t\n\u3000",
+                    {"name": "プロジェクト名", "description": ""},
+                ),
+            ],
+        )
+        def test_前後の空白を除去したパラメータが返される(
+            self, name: str, description: str, expected: dict[str, str]
+        ) -> None:
+            """内部の空白を保持し、前後の空白だけを除去して変換する."""
+            request = CreateProjectRequest(name=name, description=description)
+            assert request.to_execution_params() == expected
+
+        def test_descriptionを省略して変換できる(self) -> None:
+            """省略したdescriptionが空文字として変換されることを確認する."""
+            request = CreateProjectRequest(name="プロジェクト名")
+            assert request.to_execution_params() == {
+                "name": "プロジェクト名",
+                "description": "",
+            }
 
 
 class TestCompleteProjectRequest:

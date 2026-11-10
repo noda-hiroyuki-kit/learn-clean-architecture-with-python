@@ -11,12 +11,16 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from todo_app.domain.entities.entity import Entity
+from todo_app.domain.exceptions import ValidationError
 from todo_app.domain.value_object import ProjectStatus, TaskStatus
 
 if TYPE_CHECKING:
     from uuid import UUID
 
     from todo_app.domain.entities.task import Task
+
+NAME_MAX_LENGTH = 100
+DESCRIPTION_MAX_LENGTH = 2000
 
 
 @dataclass
@@ -29,6 +33,18 @@ class Project(Entity):
     completed_at: dt.datetime | None = field(default=None, init=False)
     completion_notes: str | None = field(default=None, init=False)
     _tasks: dict[UUID, Task] = field(default_factory=dict, init=False)
+
+    def __post_init__(self) -> None:
+        """リクエストデータを検証."""
+        if not self.name.strip():
+            msg = "プロジェクト名が必要です"
+            raise ValidationError(msg)
+        if len(self.name) > NAME_MAX_LENGTH:
+            msg = f"プロジェクト名は{NAME_MAX_LENGTH}文字以下としてください"
+            raise ValidationError(msg)
+        if self.description and len(self.description) > DESCRIPTION_MAX_LENGTH:
+            msg = f"説明は{DESCRIPTION_MAX_LENGTH}文字以下としてください"
+            raise ValidationError(msg)
 
     def add_task(self, task: Task) -> None:
         """タスクを追加する."""

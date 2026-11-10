@@ -18,6 +18,21 @@ MSG_MAX_LENGTH = 1000
 
 
 @dataclass(frozen=True)
+class CreateProjectRequest:
+    """プロジェクト作成リクエスト用のデータ構造."""
+
+    name: str
+    description: str = ""
+
+    def to_execution_params(self) -> dict:
+        """検証済みのリクエストデータをユースケース用のパラメータに変換."""
+        return {
+            "name": self.name.strip(),
+            "description": self.description.strip(),
+        }
+
+
+@dataclass(frozen=True)
 class CompleteProjectRequest:
     """プロジェクト完了リクエスト用のデータ構造."""
 
