@@ -9,19 +9,63 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from todo_app.application.common.result import Error, Result
-from todo_app.application.dtos.project_dto import CompleteProjectResponse
+from todo_app.application.dtos.project_dto import (
+    CompleteProjectResponse,
+    ProjectResponse,
+)
 from todo_app.application.repositories.project_repository import ProjectRepository
 from todo_app.application.repositories.task_repository import TaskRepository
 from todo_app.application.service_ports.notifications import NotificationPort
-from todo_app.domain.exceptions import ProjectNotFoundError, ValidationError
+from todo_app.domain.entities.project import Project
+from todo_app.domain.exceptions import (
+    BusinessRuleViolationError,
+    ProjectNotFoundError,
+    ValidationError,
+)
 
 if TYPE_CHECKING:
-    from todo_app.application.dtos.project_dto import CompleteProjectRequest
+    from todo_app.application.dtos.project_dto import (
+        CompleteProjectRequest,
+        CreateProjectRequest,
+    )
     from todo_app.application.repositories.project_repository import ProjectRepository
     from todo_app.application.repositories.task_repository import TaskRepository
     from todo_app.application.service_ports.notifications import (
         NotificationPort,
     )
+
+
+@dataclass
+class CreateProjectUseCase:
+    """プロジェクトを作成するユースケース."""
+
+    project_repository: ProjectRepository
+
+    def execute(self, request: CreateProjectRequest) -> Result:
+        """プロジェクトを作成する.
+
+        Parameters
+        ----------
+        request : CreateProjectRequest
+            プロジェクト作成リクエスト.
+
+        Returns
+        -------
+        Result
+            ユースケースの実行結果.
+
+        """
+        try:
+            params = request.to_execution_params()
+            project = Project(name=params["name"], description=params["description"])
+            self.project_repository.save(project)
+
+            return Result.success(ProjectResponse.from_entity(project))
+
+        except ValidationError as e:
+            return Result.failure(Error.validation_error(str(e)))
+        except BusinessRuleViolationError as e:
+            return Result.failure(Error.business_rule_violation(str(e)))
 
 
 @dataclass(frozen=True)

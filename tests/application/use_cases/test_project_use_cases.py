@@ -1,6 +1,6 @@
 # MIT License
 # Copyright (c) 2026 Noda Hiroyuki.
-"""CompleteProjectUseCaseのテスト."""
+"""Projectに関連するユースケースのテスト."""
 
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -11,14 +11,24 @@ from todo_app.application.common.result import ErrorCode
 from todo_app.application.dtos.project_dto import (
     CompleteProjectRequest,
     CompleteProjectResponse,
+    CreateProjectRequest,
+    ProjectResponse,
 )
 from todo_app.application.repositories.project_repository import ProjectRepository
 from todo_app.application.repositories.task_repository import TaskRepository
 from todo_app.application.service_ports.notifications import NotificationPort
-from todo_app.application.use_cases.project_use_cases import CompleteProjectUseCase
-from todo_app.domain.entities.project import Project
+from todo_app.application.use_cases.project_use_cases import (
+    CompleteProjectUseCase,
+    CreateProjectUseCase,
+)
+from todo_app.domain.entities.project import (
+    DESCRIPTION_MAX_LENGTH,
+    NAME_MAX_LENGTH,
+    Project,
+)
 from todo_app.domain.entities.task import Task
 from todo_app.domain.exceptions import (
+    BusinessRuleViolationError,
     ProjectNotFoundError,
     TaskNotFoundError,
     ValidationError,
@@ -120,6 +130,227 @@ class ValidationErrorTask(Task):
         """常に検証エラーを送出する."""
         msg = "完了できないタスクです"
         raise ValidationError(msg)
+
+
+class BusinessRuleViolationProjectRepository(InMemoryProjectRepository):
+    """保存時にビジネスルール違反を送出するリポジトリ."""
+
+    def save(self, project: Project) -> None:
+        """指定されたプロジェクトの保存を拒否する."""
+        msg = f"{project.name}は作成できません"
+        raise BusinessRuleViolationError(msg)
+
+
+class TestCreateProjectUseCase:
+    """CreateProjectUseCaseのテスト."""
+
+    @pytest.fixture
+    @classmethod
+    def fixture_repository(cls) -> InMemoryProjectRepository:
+        """テスト用の空のリポジトリを返す."""
+        return InMemoryProjectRepository()
+
+    @pytest.fixture
+    @classmethod
+    def fixture_error(cls, fixture_result: Result) -> Error:
+        """失敗結果からエラーを取り出す."""
+        error = fixture_result.error
+        assert error is not None
+        return error
+
+    class Testプロジェクトを作成できる:
+        """リクエストからプロジェクトを作成して保存する."""
+
+        @pytest.fixture(
+            params=[
+                CreateProjectRequest(name="テストプロジェクト"),
+                CreateProjectRequest(
+                    name="テストプロジェクト", description="プロジェクトの説明"
+                ),
+                CreateProjectRequest(
+                    name=" \tテストプロジェクト\u3000",
+                    description="\n プロジェクトの説明 \t",
+                ),
+            ]
+        )
+        @classmethod
+        def fixture_request(
+            cls, request: pytest.FixtureRequest
+        ) -> CreateProjectRequest:
+            """説明の省略・指定・前後の空白を含むリクエストを返す."""
+            return request.param
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls,
+            fixture_repository: InMemoryProjectRepository,
+            fixture_request: CreateProjectRequest,
+        ) -> Result:
+            """プロジェクト作成を実行した結果を返す."""
+            return CreateProjectUseCase(fixture_repository).execute(fixture_request)
+
+        @pytest.fixture
+        @classmethod
+        def fixture_project(
+            cls, fixture_result: Result, fixture_repository: InMemoryProjectRepository
+        ) -> Project:
+            """作成に成功して一度だけ保存されたプロジェクトを返す."""
+            assert fixture_result.is_success is True
+            (project,) = fixture_repository.saved_projects
+            return project
+
+        @pytest.fixture
+        @classmethod
+        def fixture_response(cls, fixture_result: Result) -> ProjectResponse:
+            """成功値からProjectResponseを取り出す."""
+            response = fixture_result.value
+            assert isinstance(response, ProjectResponse)
+            return response
+
+        def test_実行が成功する(self, fixture_result: Result) -> None:
+            """作成が成功することを確認する."""
+            assert fixture_result.is_success is True
+
+        def test_名前が空白除去後に保存される(self, fixture_project: Project) -> None:
+            """前後の空白を除去した名前で保存されることを確認する."""
+            assert fixture_project.name == "テストプロジェクト"
+
+        def test_説明が空白除去後に保存される(
+            self, fixture_project: Project, fixture_request: CreateProjectRequest
+        ) -> None:
+            """説明が指定または省略されたとおりに保存されることを確認する."""
+            assert fixture_project.description == fixture_request.description.strip()
+
+        def test_保存したプロジェクトをidで取得できる(
+            self,
+            fixture_project: Project,
+            fixture_repository: InMemoryProjectRepository,
+        ) -> None:
+            """作成したプロジェクトがリポジトリに永続化されることを確認する."""
+            assert fixture_repository.get(fixture_project.id) is fixture_project
+
+        def test_作成したプロジェクトのレスポンスが返る(
+            self, fixture_response: ProjectResponse, fixture_project: Project
+        ) -> None:
+            """保存したプロジェクトに対応するレスポンスが返ることを確認する."""
+            assert fixture_response == ProjectResponse.from_entity(fixture_project)
+
+        def test_作成時の状態がactiveになる(
+            self, fixture_response: ProjectResponse
+        ) -> None:
+            """作成時のレスポンスがACTIVE状態であることを確認する."""
+            assert fixture_response.status == "ACTIVE"
+
+        def test_作成時の完了日時はnoneになる(
+            self, fixture_response: ProjectResponse
+        ) -> None:
+            """作成時の完了日時が未設定であることを確認する."""
+            assert fixture_response.completed_date is None
+
+        def test_作成時のタスク一覧は空になる(
+            self, fixture_response: ProjectResponse
+        ) -> None:
+            """作成時のタスク一覧が空であることを確認する."""
+            assert fixture_response.tasks == []
+
+    class Test検証エラーの場合は失敗する:
+        """不正な入力では保存せずに検証エラーを返す."""
+
+        @pytest.fixture(
+            params=[
+                (
+                    CreateProjectRequest(name=" \t\u3000"),
+                    "プロジェクト名が必要です",
+                ),
+                (
+                    CreateProjectRequest(name="名" * (NAME_MAX_LENGTH + 1)),
+                    f"プロジェクト名は{NAME_MAX_LENGTH}文字以下としてください",
+                ),
+                (
+                    CreateProjectRequest(
+                        name="テストプロジェクト",
+                        description="説" * (DESCRIPTION_MAX_LENGTH + 1),
+                    ),
+                    f"説明は{DESCRIPTION_MAX_LENGTH}文字以下としてください",
+                ),
+            ]
+        )
+        @classmethod
+        def fixture_invalid_input(
+            cls, request: pytest.FixtureRequest
+        ) -> tuple[CreateProjectRequest, str]:
+            """不正な入力と期待するエラーメッセージを返す."""
+            return request.param
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls,
+            fixture_repository: InMemoryProjectRepository,
+            fixture_invalid_input: tuple[CreateProjectRequest, str],
+        ) -> Result:
+            """不正な入力で作成を実行した結果を返す."""
+            return CreateProjectUseCase(fixture_repository).execute(
+                fixture_invalid_input[0]
+            )
+
+        def test_実行が失敗する(self, fixture_result: Result) -> None:
+            """検証エラーが失敗結果になることを確認する."""
+            assert fixture_result.is_success is False
+
+        def test_エラーコードがvalidation_errorになる(
+            self, fixture_error: Error
+        ) -> None:
+            """エラーコードがVALIDATION_ERRORになることを確認する."""
+            assert fixture_error.code is ErrorCode.VALIDATION_ERROR
+
+        def test_検証エラーのメッセージが保持される(
+            self,
+            fixture_error: Error,
+            fixture_invalid_input: tuple[CreateProjectRequest, str],
+        ) -> None:
+            """ドメインの検証エラーメッセージが保持されることを確認する."""
+            assert fixture_error.message == fixture_invalid_input[1]
+
+        @pytest.mark.usefixtures("fixture_result")
+        def test_プロジェクトが保存されない(
+            self, fixture_repository: InMemoryProjectRepository
+        ) -> None:
+            """検証エラー時には保存処理が行われないことを確認する."""
+            assert fixture_repository.saved_projects == []
+
+        def test_成功値が返されない(self, fixture_result: Result) -> None:
+            """検証エラー時に成功値が設定されないことを確認する."""
+            assert fixture_result.value is None
+
+    class Testビジネスルール違反の場合は失敗する:
+        """保存時のビジネスルール違反を失敗結果に変換する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(cls) -> Result:
+            """保存がビジネスルール違反になる実行結果を返す."""
+            use_case = CreateProjectUseCase(BusinessRuleViolationProjectRepository())
+            return use_case.execute(CreateProjectRequest(name="テストプロジェクト"))
+
+        def test_実行が失敗する(self, fixture_result: Result) -> None:
+            """ビジネスルール違反が失敗結果になることを確認する."""
+            assert fixture_result.is_success is False
+
+        def test_エラーコードがbusiness_rule_violationになる(
+            self, fixture_error: Error
+        ) -> None:
+            """エラーコードがBUSINESS_RULE_VIOLATIONになることを確認する."""
+            assert fixture_error.code is ErrorCode.BUSINESS_RULE_VIOLATION
+
+        def test_例外のメッセージが保持される(self, fixture_error: Error) -> None:
+            """ビジネスルール違反のメッセージが保持されることを確認する."""
+            assert fixture_error.message == "テストプロジェクトは作成できません"
+
+        def test_成功値が返されない(self, fixture_result: Result) -> None:
+            """保存失敗時に成功値が設定されないことを確認する."""
+            assert fixture_result.value is None
 
 
 class TestCompleteProjectUseCase:

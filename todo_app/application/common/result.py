@@ -15,6 +15,7 @@ class ErrorCode(Enum):
 
     NOT_FOUND = "NOT_FOUND"
     VALIDATION_ERROR = "VALIDATION_ERROR"
+    BUSINESS_RULE_VIOLATION = "BUSINESS_RULE_VIOLATION"
     # Add other error codes as needed
 
 
@@ -38,6 +39,11 @@ class Error:
     def validation_error(cls, message: str) -> Self:
         """バリデーションエラーを生成する."""
         return cls(code=ErrorCode.VALIDATION_ERROR, message=message)
+
+    @classmethod
+    def business_rule_violation(cls, message: str) -> Self:
+        """Create a BUSINESS_RULE_VIOLATION error with the specified message."""
+        return cls(code=ErrorCode.BUSINESS_RULE_VIOLATION, message=message)
 
 
 @dataclass(frozen=True)
