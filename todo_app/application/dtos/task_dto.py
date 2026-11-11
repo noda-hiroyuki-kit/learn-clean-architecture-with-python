@@ -6,15 +6,54 @@
 """アプリケーション層のための Task データ転送オブジェクト."""
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, Self
 from uuid import UUID
 
-from todo_app.domain.value_object import Priority, TaskStatus
+from todo_app.domain.value_object import Deadline, Priority, TaskStatus
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
     from todo_app.domain.entities.task import Task
+
+
+@dataclass(frozen=True)
+class CreateTaskRequest:
+    """タスク作成のリクエストデータ."""
+
+    title: str
+    description: str
+    due_date: str | None = None
+    priority: str | None = None
+    project_id: str | None = None
+
+    def __post_init__(self) -> None:
+        """リクエストデータを検証する."""
+        if not self.title.strip():
+            msg = "タイトルが必要です"
+            raise ValueError(msg)
+        if self.priority is not None:
+            try:
+                _normalize_priority(self.priority)
+            except AttributeError, ValueError:
+                msg = "優先度は次のいずれかである必要があります: "
+                msg += f"{', '.join(p.name for p in Priority)}"
+                raise ValueError(msg) from None
+
+    def to_execution_params(self) -> dict:
+        """リクエストデータをユースケースのパラメータに変換する."""
+        params = {
+            "title": self.title.strip(),
+            "description": self.description.strip(),
+        }
+
+        if self.due_date:
+            params["due_date"] = Deadline(datetime.fromisoformat(self.due_date))
+        if self.priority:
+            params["priority"] = Priority[_normalize_priority(self.priority)]
+        if self.project_id:
+            params["project_id"] = UUID(self.project_id)
+
+        return params
 
 
 def _normalize_priority(priority: str) -> str:

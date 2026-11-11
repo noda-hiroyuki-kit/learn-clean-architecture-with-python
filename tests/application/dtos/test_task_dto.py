@@ -3,17 +3,185 @@
 """Taskデータ転送オブジェクトのテスト."""
 
 from dataclasses import FrozenInstanceError
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
 
-from todo_app.application.dtos.task_dto import SetTaskPriorityRequest, TaskResponse
+from todo_app.application.dtos.task_dto import (
+    CreateTaskRequest,
+    SetTaskPriorityRequest,
+    TaskResponse,
+)
 from todo_app.domain.entities.task import Task
 from todo_app.domain.value_object import Deadline, Priority, TaskStatus
 
 TASK_ID = "12345678-1234-5678-1234-567812345678"
 PROJECT_ID = "87654321-4321-8765-4321-876543218765"
+
+
+class TestCreateTaskRequest:
+    """CreateTaskRequestのテスト."""
+
+    class Test正しく生成される:
+        """CreateTaskRequestが正しく生成される."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_request(cls) -> CreateTaskRequest:
+            """必須フィールドだけを指定したリクエストを返す."""
+            return CreateTaskRequest(title="タスク", description="説明")
+
+        def test_titleが設定される(self, fixture_request: CreateTaskRequest) -> None:
+            """タイトルが保持されることを確認する."""
+            assert fixture_request.title == "タスク"
+
+        def test_descriptionが設定される(
+            self, fixture_request: CreateTaskRequest
+        ) -> None:
+            """説明が保持されることを確認する."""
+            assert fixture_request.description == "説明"
+
+        @pytest.mark.parametrize("field_name", ["due_date", "priority", "project_id"])
+        def test_任意フィールドの既定値がnoneになる(
+            self, fixture_request: CreateTaskRequest, field_name: str
+        ) -> None:
+            """任意フィールドの既定値がNoneであることを確認する."""
+            assert getattr(fixture_request, field_name) is None
+
+        @pytest.mark.parametrize(
+            "field_name", ["title", "description", "due_date", "priority", "project_id"]
+        )
+        def test_フィールドを変更できない(
+            self, fixture_request: CreateTaskRequest, field_name: str
+        ) -> None:
+            """リクエストの各フィールドを再代入できないことを確認する."""
+            with pytest.raises(FrozenInstanceError, match=field_name):
+                setattr(
+                    fixture_request, field_name, getattr(fixture_request, field_name)
+                )
+
+    class Test検証エラーになる:
+        """不正なタイトルや優先度は生成時に拒否される."""
+
+        @pytest.mark.parametrize("title", ["", "   ", "\t\n", "\u3000"])
+        def test_空のタイトルは拒否される(self, title: str) -> None:
+            """空文字または空白のみのタイトルはValueErrorになる."""
+            with pytest.raises(ValueError, match=r"^タイトルが必要です$"):
+                CreateTaskRequest(title=title, description="")
+
+        @pytest.mark.parametrize("priority", ["", " \t", "UNKNOWN"])
+        def test_無効な優先度は拒否される(self, priority: str) -> None:
+            """無効な優先度は選択肢を示すValueErrorになる."""
+            with pytest.raises(
+                ValueError,
+                match=r"^優先度は次のいずれかである必要があります: LOW, MEDIUM, HIGH$",
+            ):
+                CreateTaskRequest(title="タスク", description="", priority=priority)
+
+    class TestToExecutionParamsでパラメータに変換できる:
+        """入力を正規化してユースケースのパラメータへ変換する."""
+
+        def test_任意フィールドを省略すると必須フィールドだけが返る(self) -> None:
+            """前後の空白だけを除去し、未指定のキーを含めない."""
+            request = CreateTaskRequest(
+                title=" \tタスク 名\u3000", description="\n 説明 文 \t"
+            )
+            assert request.to_execution_params() == {
+                "title": "タスク 名",
+                "description": "説明 文",
+            }
+
+        @pytest.mark.parametrize("description", ["", " \t\n\u3000"])
+        def test_空の説明を変換できる(self, description: str) -> None:
+            """空文字または空白のみの説明は空文字に変換される."""
+            request = CreateTaskRequest(title="タスク", description=description)
+            assert request.to_execution_params()["description"] == ""
+
+        @pytest.mark.parametrize(
+            ("priority", "expected"),
+            [
+                ("LOW", Priority.LOW),
+                ("medium", Priority.MEDIUM),
+                (" high ", Priority.HIGH),
+            ],
+        )
+        def test_優先度を列挙型に変換できる(
+            self, priority: str, expected: Priority
+        ) -> None:
+            """大小文字と前後の空白を正規化してPriorityに変換する."""
+            request = CreateTaskRequest(
+                title="タスク", description="", priority=priority
+            )
+            assert request.to_execution_params()["priority"] is expected
+
+        def test_全フィールドを指定して変換できる(self) -> None:
+            """期限・優先度・プロジェクトIDを適切な型に変換する."""
+            due_date = datetime.now(tz=UTC) + timedelta(days=7)
+            request = CreateTaskRequest(
+                title="タスク",
+                description="説明",
+                due_date=due_date.isoformat(),
+                priority="HIGH",
+                project_id=PROJECT_ID,
+            )
+            assert request.to_execution_params() == {
+                "title": "タスク",
+                "description": "説明",
+                "due_date": Deadline(due_date),
+                "priority": Priority.HIGH,
+                "project_id": UUID(PROJECT_ID),
+            }
+
+        def test_空の期限とproject_idはパラメータに含まれない(self) -> None:
+            """空文字の期限とプロジェクトIDは未指定として扱われる."""
+            request = CreateTaskRequest(
+                title="タスク", description="", due_date="", project_id=""
+            )
+            assert request.to_execution_params() == {
+                "title": "タスク",
+                "description": "",
+            }
+
+    class Test変換時にエラーになる:
+        """不正な期限やプロジェクトIDは変換時に拒否される."""
+
+        def test_不正な日付形式は拒否される(self) -> None:
+            """ISO形式でない期限はValueErrorになる."""
+            request = CreateTaskRequest(
+                title="タスク", description="", due_date="not-a-date"
+            )
+            with pytest.raises(ValueError, match="Invalid isoformat string"):
+                request.to_execution_params()
+
+        def test_タイムゾーンのない期限は拒否される(self) -> None:
+            """タイムゾーンのない期限はDeadlineの検証で拒否される."""
+            request = CreateTaskRequest(
+                title="タスク", description="", due_date="2099-01-01T12:00:00"
+            )
+            with pytest.raises(ValueError, match="期限にはタイムゾーン情報が必要です"):
+                request.to_execution_params()
+
+        def test_過去の期限は拒否される(self) -> None:
+            """過去の期限はDeadlineの検証で拒否される."""
+            past_date = datetime.now(tz=UTC) - timedelta(days=1)
+            request = CreateTaskRequest(
+                title="タスク", description="", due_date=past_date.isoformat()
+            )
+            with pytest.raises(
+                ValueError, match="期限は現在時刻以降でなければなりません"
+            ):
+                request.to_execution_params()
+
+        def test_不正なproject_idは拒否される(self) -> None:
+            """UUID形式でないプロジェクトIDはValueErrorになる."""
+            request = CreateTaskRequest(
+                title="タスク", description="", project_id="not-a-uuid"
+            )
+            with pytest.raises(
+                ValueError, match="badly formed hexadecimal UUID string"
+            ):
+                request.to_execution_params()
 
 
 class TestTaskResponse:
