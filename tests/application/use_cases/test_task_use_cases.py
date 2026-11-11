@@ -1,26 +1,38 @@
 # MIT License
 # Copyright (c) 2026 Noda Hiroyuki.
-"""CompleteTaskUseCaseのテスト."""
+"""Taskに関連するユースケースのテスト."""
 
+import datetime as dt
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import pytest
 
 from todo_app.application.common.result import ErrorCode
-from todo_app.application.dtos.task_dto import SetTaskPriorityRequest, TaskResponse
+from todo_app.application.dtos.task_dto import (
+    CreateTaskRequest,
+    SetTaskPriorityRequest,
+    TaskResponse,
+)
+from todo_app.application.repositories.project_repository import ProjectRepository
 from todo_app.application.repositories.task_repository import TaskRepository
 from todo_app.application.service_ports.notifications import NotificationPort
 from todo_app.application.use_cases.task_use_cases import (
     CompleteTaskUseCase,
+    CreateTaskUseCase,
     SetTaskPriorityUseCase,
 )
+from todo_app.domain.entities.project import Project
 from todo_app.domain.entities.task import Task
-from todo_app.domain.exceptions import TaskNotFoundError, ValidationError
-from todo_app.domain.value_object import Priority, TaskStatus
+from todo_app.domain.exceptions import (
+    BusinessRuleViolationError,
+    ProjectNotFoundError,
+    TaskNotFoundError,
+    ValidationError,
+)
+from todo_app.domain.value_object import Deadline, Priority, TaskStatus
 
 if TYPE_CHECKING:
-    import datetime as dt
     from collections.abc import Sequence
     from uuid import UUID
 
@@ -58,6 +70,49 @@ class InMemoryTaskRepository(TaskRepository):
     def get_active_tasks(self) -> Sequence[Task]:
         """アクティブなTaskを取得する."""
         return [t for t in self._tasks.values() if t.status is not TaskStatus.DONE]
+
+
+class InMemoryProjectRepository(ProjectRepository):
+    """テスト用のインメモリProjectリポジトリ."""
+
+    def __init__(self) -> None:
+        """空のProject保存領域と取得履歴を初期化する."""
+        self._projects: dict[UUID, Project] = {}
+        self.requested_project_ids: list[UUID] = []
+
+    def get(self, project_id: UUID) -> Project:
+        """IDを指定してProjectを取得する."""
+        self.requested_project_ids.append(project_id)
+        try:
+            return self._projects[project_id]
+        except KeyError as e:
+            raise ProjectNotFoundError(project_id) from e
+
+    def save(self, project: Project) -> None:
+        """Projectを保存する."""
+        self._projects[project.id] = project
+
+    def delete(self, project_id: UUID) -> None:
+        """Projectを削除する."""
+        self._projects.pop(project_id, None)
+
+
+class ValidationErrorSaveTaskRepository(InMemoryTaskRepository):
+    """saveで検証エラーを送出するテスト用リポジトリ."""
+
+    def save(self, task: Task) -> None:  # noqa: ARG002
+        """Taskの保存時に検証エラーを送出する."""
+        msg = "タスクを保存できません"
+        raise ValidationError(msg)
+
+
+class BusinessRuleViolationSaveTaskRepository(InMemoryTaskRepository):
+    """saveでビジネスルール違反を送出するテスト用リポジトリ."""
+
+    def save(self, task: Task) -> None:  # noqa: ARG002
+        """Taskの保存時にビジネスルール違反を送出する."""
+        msg = "タスクを保存できません"
+        raise BusinessRuleViolationError(msg)
 
 
 class ValidationErrorTaskRepository(InMemoryTaskRepository):
@@ -102,6 +157,246 @@ class NoCompletedAtTask(Task):
         """completed_atを設定せずに完了状態へ遷移する."""
         self.status = TaskStatus.DONE
         self.completion_notes = notes
+
+
+class TestCreateTaskUseCase:
+    """CreateTaskUseCaseのテスト."""
+
+    @pytest.fixture
+    @classmethod
+    def fixture_task_repository(cls) -> InMemoryTaskRepository:
+        """テスト用のTaskリポジトリを返す."""
+        return InMemoryTaskRepository()
+
+    @pytest.fixture
+    @classmethod
+    def fixture_project_repository(cls) -> InMemoryProjectRepository:
+        """テスト用のProjectリポジトリを返す."""
+        return InMemoryProjectRepository()
+
+    class Test有効なリクエストで作成できる:
+        """有効なリクエストでTaskが作成・保存される."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_task_repository(cls) -> InMemoryTaskRepository:
+            """空のTaskリポジトリを返す."""
+            return InMemoryTaskRepository()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls,
+            fixture_task_repository: InMemoryTaskRepository,
+            fixture_project_repository: InMemoryProjectRepository,
+        ) -> Result:
+            """ProjectなしのTask作成を実行した結果を返す."""
+            request = CreateTaskRequest(
+                title="  テストタスク  ",
+                description="  タスクの説明  ",
+            )
+            return CreateTaskUseCase(
+                fixture_task_repository, fixture_project_repository
+            ).execute(request)
+
+        @pytest.fixture
+        @classmethod
+        def fixture_task(
+            cls,
+            fixture_result: Result,
+            fixture_task_repository: InMemoryTaskRepository,
+        ) -> Task:
+            """作成に成功して保存されたTaskを返す."""
+            assert fixture_result.is_success is True
+            (task,) = fixture_task_repository.saved_tasks
+            return task
+
+        def test_taskが初期値と整形済みの情報で保存される(
+            self, fixture_task: Task
+        ) -> None:
+            """Taskの情報が整形され、既定値とともに保存されることを確認する."""
+            assert (
+                fixture_task.title,
+                fixture_task.description,
+                fixture_task.priority,
+                fixture_task.due_date,
+                fixture_task.status,
+            ) == (
+                "テストタスク",
+                "タスクの説明",
+                Priority.MEDIUM,
+                None,
+                TaskStatus.TODO,
+            )
+
+        def test_指定した期限がtaskに設定される(
+            self,
+            fixture_task_repository: InMemoryTaskRepository,
+            fixture_project_repository: InMemoryProjectRepository,
+        ) -> None:
+            """リクエストで指定した期限がTaskに設定されることを確認する."""
+            due_date = dt.datetime.fromisoformat("2026-12-01T10:00:00+09:00")
+            request = CreateTaskRequest(
+                title="テストタスク",
+                description="タスクの説明",
+                due_date=due_date.isoformat(),
+            )
+            CreateTaskUseCase(
+                fixture_task_repository, fixture_project_repository
+            ).execute(request)
+            (task,) = fixture_task_repository.saved_tasks
+            assert task.due_date == Deadline(due_date)
+
+    class TestProjectに紐づけて作成できる:
+        """指定されたProjectにTaskを紐づけて作成する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_project(cls) -> Project:
+            """Taskに紐づけるProjectを返す."""
+            return Project(name="テストプロジェクト")
+
+        @pytest.fixture
+        @classmethod
+        def fixture_project_repository(
+            cls, fixture_project: Project
+        ) -> InMemoryProjectRepository:
+            """Projectを1件保存したリポジトリを返す."""
+            repository = InMemoryProjectRepository()
+            repository.save(fixture_project)
+            return repository
+
+        @pytest.fixture
+        @classmethod
+        def fixture_task_repository(cls) -> InMemoryTaskRepository:
+            """空のTaskリポジトリを返す."""
+            return InMemoryTaskRepository()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_task(
+            cls,
+            fixture_project: Project,
+            fixture_project_repository: InMemoryProjectRepository,
+            fixture_task_repository: InMemoryTaskRepository,
+        ) -> Task:
+            """Projectに紐づけて作成されたTaskを返す."""
+            request = CreateTaskRequest(
+                title="テストタスク",
+                description="タスクの説明",
+                project_id=str(fixture_project.id),
+            )
+            result = CreateTaskUseCase(
+                fixture_task_repository, fixture_project_repository
+            ).execute(request)
+            assert result.is_success is True
+            (task,) = fixture_task_repository.saved_tasks
+            return task
+
+        def test_taskにproject_idが設定される(
+            self, fixture_task: Task, fixture_project: Project
+        ) -> None:
+            """作成したTaskに指定されたProject IDが設定されることを確認する."""
+            assert fixture_task.project_id == fixture_project.id
+
+    class Test存在しないprojectの場合は失敗する:
+        """存在しないProjectを指定した場合は失敗結果を返す."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_project_id(cls) -> UUID:
+            """存在しないProjectのIDを返す."""
+            return uuid4()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls,
+            fixture_task_repository: InMemoryTaskRepository,
+            fixture_project_repository: InMemoryProjectRepository,
+            fixture_project_id: UUID,
+        ) -> Result:
+            """存在しないProjectを指定してTask作成を実行した結果を返す."""
+            request = CreateTaskRequest(
+                title="テストタスク",
+                description="タスクの説明",
+                project_id=str(fixture_project_id),
+            )
+            return CreateTaskUseCase(
+                fixture_task_repository, fixture_project_repository
+            ).execute(request)
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """失敗結果からエラーを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_errorのcodeがnot_foundになる(self, fixture_error: Error) -> None:
+            """Project未検出時にnot_foundエラーが返ることを確認する."""
+            assert fixture_error.code is ErrorCode.NOT_FOUND
+
+    class TestValidationErrorの場合は失敗する:
+        """Task保存時の検証エラーを失敗結果に変換する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls, fixture_project_repository: InMemoryProjectRepository
+        ) -> Result:
+            """検証エラーが発生したTask作成の結果を返す."""
+            request = CreateTaskRequest(title="テストタスク", description="")
+            return CreateTaskUseCase(
+                ValidationErrorSaveTaskRepository(), fixture_project_repository
+            ).execute(request)
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """失敗結果からエラーを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_validation_errorに変換される(self, fixture_error: Error) -> None:
+            """検証エラーがvalidation_errorに変換されることを確認する."""
+            assert (fixture_error.code, fixture_error.message) == (
+                ErrorCode.VALIDATION_ERROR,
+                "タスクを保存できません",
+            )
+
+    class TestBusinessRuleViolationErrorの場合は失敗する:
+        """Task保存時のビジネスルール違反を失敗結果に変換する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls, fixture_project_repository: InMemoryProjectRepository
+        ) -> Result:
+            """ビジネスルール違反が発生したTask作成の結果を返す."""
+            request = CreateTaskRequest(title="テストタスク", description="")
+            return CreateTaskUseCase(
+                BusinessRuleViolationSaveTaskRepository(), fixture_project_repository
+            ).execute(request)
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """失敗結果からエラーを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_business_rule_violationに変換される(
+            self, fixture_error: Error
+        ) -> None:
+            """ビジネスルール違反が対応するエラーに変換されることを確認する."""
+            assert (fixture_error.code, fixture_error.message) == (
+                ErrorCode.BUSINESS_RULE_VIOLATION,
+                "タスクを保存できません",
+            )
 
 
 class TestCompleteTaskUseCase:

@@ -9,8 +9,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from todo_app.application.common.result import Error, Result
-from todo_app.application.dtos.task_dto import TaskResponse
+from todo_app.application.dtos.task_dto import CreateTaskRequest, TaskResponse
+from todo_app.domain.entities.task import Task
 from todo_app.domain.exceptions import (
+    BusinessRuleViolationError,
+    ProjectNotFoundError,
     TaskNotFoundError,
     ValidationError,
 )
@@ -21,9 +24,9 @@ if TYPE_CHECKING:
     from uuid import UUID
 
     from todo_app.application.dtos.task_dto import SetTaskPriorityRequest
+    from todo_app.application.repositories.project_repository import ProjectRepository
     from todo_app.application.repositories.task_repository import TaskRepository
     from todo_app.application.service_ports.notifications import NotificationPort
-    from todo_app.domain.entities.task import Task
 
 
 def _get_completed_at(task: Task) -> dt.datetime:
@@ -82,6 +85,42 @@ class CompleteTaskUseCase:
             return Result.failure(Error.not_found("Task", str(task_id)))
         except ValidationError as e:
             return Result.failure(Error.validation_error(str(e)))
+
+
+@dataclass
+class CreateTaskUseCase:
+    """新規Taskを作成するユースケース."""
+
+    task_repository: TaskRepository
+    project_repository: ProjectRepository
+
+    def execute(self, request: CreateTaskRequest) -> Result:
+        """Taskを作成するユースケースを実行する."""
+        try:
+            params = request.to_execution_params()
+            project_id = params.get("project_id")
+            if project_id:
+                self.project_repository.get(project_id)
+
+            task = Task(
+                title=params["title"],
+                description=params["description"],
+                due_date=params.get("due_date"),
+                priority=params.get("priority", Priority.MEDIUM),
+            )
+            if project_id:
+                task.project_id = project_id
+
+            self.task_repository.save(task)
+
+            return Result.success(TaskResponse.from_entity(task))
+
+        except ProjectNotFoundError:
+            return Result.failure(Error.not_found("Project", str(project_id)))
+        except ValidationError as e:
+            return Result.failure(Error.validation_error(str(e)))
+        except BusinessRuleViolationError as e:
+            return Result.failure(Error.business_rule_violation(str(e)))
 
 
 @dataclass
