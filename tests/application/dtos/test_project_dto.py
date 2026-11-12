@@ -10,7 +10,6 @@ from uuid import UUID
 import pytest
 
 from todo_app.application.dtos.project_dto import (
-    MSG_MAX_LENGTH,
     CompleteProjectRequest,
     CompleteProjectResponse,
     CreateProjectRequest,
@@ -137,14 +136,6 @@ class TestCompleteProjectRequest:
             request = CompleteProjectRequest(project_id=PROJECT_ID)
             assert request.completion_notes is None
 
-        def test_最大長ちょうどのcompletion_notesで生成できる(self) -> None:
-            """最大長ちょうどのcompletion_notesで生成できることを確認する."""
-            notes = "a" * MSG_MAX_LENGTH
-            request = CompleteProjectRequest(
-                project_id=PROJECT_ID, completion_notes=notes
-            )
-            assert request.completion_notes == notes
-
     class Test検証エラーになる:
         """不正なリクエストデータの場合はValidationErrorが送出される."""
 
@@ -157,19 +148,6 @@ class TestCompleteProjectRequest:
             """project_idが空白のみの場合はValidationErrorになることを確認する."""
             with pytest.raises(ValidationError, match="プロジェクト ID が必要です"):
                 CompleteProjectRequest(project_id="   ")
-
-        def test_completion_notesが最大長を超える場合はvalidation_errorになる(
-            self,
-        ) -> None:
-            """completion_notesが最大長を超える場合はValidationErrorになることを確認する."""
-            with pytest.raises(
-                ValidationError,
-                match=f"完了ノートは{MSG_MAX_LENGTH}文字以下としてください",
-            ):
-                CompleteProjectRequest(
-                    project_id=PROJECT_ID,
-                    completion_notes="a" * (MSG_MAX_LENGTH + 1),
-                )
 
     class TestToExecutionParamsでユースケース用のパラメータに変換できる:
         """to_execution_paramsでユースケース用のパラメータに変換できる."""

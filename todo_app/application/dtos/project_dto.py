@@ -18,8 +18,6 @@ if TYPE_CHECKING:
 
     from todo_app.domain.entities.project import Project
 
-MSG_MAX_LENGTH = 1000
-
 
 @dataclass(frozen=True)
 class CreateProjectRequest:
@@ -47,10 +45,6 @@ class CompleteProjectRequest:
         """リクエストデータを検証."""
         if not self.project_id.strip():
             msg = "プロジェクト ID が必要です"
-            raise ValidationError(msg)
-
-        if self.completion_notes and len(self.completion_notes) > MSG_MAX_LENGTH:
-            msg = f"完了ノートは{MSG_MAX_LENGTH}文字以下としてください"
             raise ValidationError(msg)
 
     def to_execution_params(self) -> dict:

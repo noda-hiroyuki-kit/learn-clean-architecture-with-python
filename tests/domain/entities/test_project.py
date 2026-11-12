@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 
 from todo_app.domain.entities.project import (
+    COMPLETION_NOTES_MAX_LENGTH,
     DESCRIPTION_MAX_LENGTH,
     NAME_MAX_LENGTH,
     Project,
@@ -267,6 +268,24 @@ class TestProject:
             project = Project(name="Test Project")
             project.mark_completed()
             assert project.completion_notes is None
+
+        def test最大長のnotesを指定して完了できる(self) -> None:
+            """最大長ちょうどのnotesでProjectを完了できることを確認する."""
+            notes = "a" * COMPLETION_NOTES_MAX_LENGTH
+            project = Project(name="Test Project")
+            project.mark_completed(notes=notes)
+            assert project.completion_notes == notes
+
+        def test最大長を超えるnotesを指定するとvalidation_errorになる(
+            self,
+        ) -> None:
+            """最大長を超えるnotesはValidationErrorになることを確認する."""
+            project = Project(name="Test Project")
+            with pytest.raises(
+                ValidationError,
+                match=f"完了ノートは{COMPLETION_NOTES_MAX_LENGTH}文字以下としてください",
+            ):
+                project.mark_completed(notes="a" * (COMPLETION_NOTES_MAX_LENGTH + 1))
 
     class Test完了済みプロジェクトでmarkCompletedを再度呼んでも状態が変わらない:
         """完了済みプロジェクトでmark_completedを再度呼んでも状態が変わらないことのテスト."""

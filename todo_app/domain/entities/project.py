@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 NAME_MAX_LENGTH = 100
 DESCRIPTION_MAX_LENGTH = 2000
+COMPLETION_NOTES_MAX_LENGTH = 1000
 
 
 @dataclass
@@ -82,6 +83,9 @@ class Project(Entity):
         """
         if self.status == ProjectStatus.COMPLETED:
             return
+        if notes and len(notes) > COMPLETION_NOTES_MAX_LENGTH:
+            msg = f"完了ノートは{COMPLETION_NOTES_MAX_LENGTH}文字以下としてください"
+            raise ValidationError(msg)
         self.status = ProjectStatus.COMPLETED
         self.completed_at = dt.datetime.now(tz=dt.UTC)
         self.completion_notes = notes
