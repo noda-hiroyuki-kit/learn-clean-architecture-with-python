@@ -9,6 +9,7 @@ from uuid import UUID
 import pytest
 
 from todo_app.application.dtos.task_dto import (
+    CompleteTaskRequest,
     CreateTaskRequest,
     SetTaskPriorityRequest,
     TaskResponse,
@@ -18,6 +19,76 @@ from todo_app.domain.value_object import Deadline, Priority, TaskStatus
 
 TASK_ID = "12345678-1234-5678-1234-567812345678"
 PROJECT_ID = "87654321-4321-8765-4321-876543218765"
+
+
+class TestCompleteTaskRequest:
+    """CompleteTaskRequestのテスト."""
+
+    class Test正しく生成される:
+        """CompleteTaskRequestが正しく生成される."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_request(cls) -> CompleteTaskRequest:
+            """task_idだけを指定したリクエストを返す."""
+            return CompleteTaskRequest(task_id=TASK_ID)
+
+        def test_task_idが設定される(
+            self, fixture_request: CompleteTaskRequest
+        ) -> None:
+            """task_idが保持されることを確認する."""
+            assert fixture_request.task_id == TASK_ID
+
+        def test_completion_notesは既定でnoneになる(
+            self, fixture_request: CompleteTaskRequest
+        ) -> None:
+            """completion_notesの既定値がNoneであることを確認する."""
+            assert fixture_request.completion_notes is None
+
+        @pytest.mark.parametrize("field_name", ["task_id", "completion_notes"])
+        def test_フィールドを変更できない(
+            self, fixture_request: CompleteTaskRequest, field_name: str
+        ) -> None:
+            """リクエストの各フィールドを再代入できないことを確認する."""
+            with pytest.raises(FrozenInstanceError, match=field_name):
+                setattr(
+                    fixture_request, field_name, getattr(fixture_request, field_name)
+                )
+
+        def test指定したcompletion_notesが設定される(self) -> None:
+            """指定したcompletion_notesが保持されることを確認する."""
+            request = CompleteTaskRequest(task_id=TASK_ID, completion_notes="完了メモ")
+            assert request.completion_notes == "完了メモ"
+
+    class Test検証エラーになる:
+        """不正なTask IDは生成時に拒否される."""
+
+        @pytest.mark.parametrize("task_id", ["", "   "])
+        def test_task_idが空の場合はvalue_errorになる(self, task_id: str) -> None:
+            """task_idが空または空白のみの場合はValueErrorになることを確認する."""
+            with pytest.raises(ValueError, match="タスク ID が必要です"):
+                CompleteTaskRequest(task_id=task_id)
+
+        def test_task_idがuuid形式でない場合はvalue_errorになる(self) -> None:
+            """UUID形式でないtask_idはValueErrorになることを確認する."""
+            with pytest.raises(ValueError, match="タスク ID の形式が無効です"):
+                CompleteTaskRequest(task_id="not-a-uuid")
+
+    class TestToExecutionParamsでユースケース用のパラメータに変換できる:
+        """to_execution_paramsでUUIDと完了メモを変換できる."""
+
+        @pytest.mark.parametrize("completion_notes", [None, "完了メモ"])
+        def test_task_idと完了ノートをパラメータに変換できる(
+            self, completion_notes: str | None
+        ) -> None:
+            """task_idをUUIDに変換し、完了ノートを保持することを確認する."""
+            request = CompleteTaskRequest(
+                task_id=TASK_ID, completion_notes=completion_notes
+            )
+            assert request.to_execution_params() == {
+                "task_id": UUID(TASK_ID),
+                "completion_notes": completion_notes,
+            }
 
 
 class TestCreateTaskRequest:

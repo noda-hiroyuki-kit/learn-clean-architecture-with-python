@@ -17,6 +17,32 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
+class CompleteTaskRequest:
+    """タスク完了のリクエストデータ."""
+
+    task_id: str
+    completion_notes: str | None = None
+
+    def __post_init__(self) -> None:
+        """リクエストデータを検証する."""
+        if not self.task_id.strip():
+            msg = "タスク ID が必要です"
+            raise ValueError(msg)
+        try:
+            UUID(self.task_id)
+        except ValueError:
+            msg = "タスク ID の形式が無効です"
+            raise ValueError(msg) from None
+
+    def to_execution_params(self) -> dict:
+        """リクエストデータをユースケースのパラメータに変換する."""
+        return {
+            "task_id": UUID(self.task_id),
+            "completion_notes": self.completion_notes,
+        }
+
+
+@dataclass(frozen=True)
 class CreateTaskRequest:
     """タスク作成のリクエストデータ."""
 
