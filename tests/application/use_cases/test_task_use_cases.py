@@ -22,6 +22,7 @@ from todo_app.application.use_cases.task_use_cases import (
     CompleteTaskUseCase,
     CreateTaskUseCase,
     SetTaskPriorityUseCase,
+    _get_completed_at,
 )
 from todo_app.domain.entities.project import Project
 from todo_app.domain.entities.task import Task
@@ -149,6 +150,17 @@ class ValidationErrorTask(Task):
         """常に検証エラーを送出する."""
         msg = "完了できないタスクです"
         raise ValidationError(msg)
+
+
+class BusinessRuleViolationTask(Task):
+    """状態を変更した後でビジネスルール違反を送出するスタブTask."""
+
+    def complete(self, notes: str | None = None) -> None:
+        """状態を変更してからビジネスルール違反を送出する."""
+        self.status = TaskStatus.DONE
+        self.completion_notes = notes
+        msg = "完了できないタスクです"
+        raise BusinessRuleViolationError(msg)
 
 
 class NoCompletedAtTask(Task):
@@ -602,6 +614,67 @@ class TestCompleteTaskUseCase:
             """errorのmessageに例外のメッセージが設定されることを確認する."""
             assert fixture_error.message == "完了できないタスクです"
 
+    class Testビジネスルール違反の場合は失敗して状態が復元される:
+        """BusinessRuleViolationErrorを結果に変換し、Taskを元の状態に戻す."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_repository(cls) -> InMemoryTaskRepository:
+            """空のTaskリポジトリを返す."""
+            return InMemoryTaskRepository()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_task(cls, fixture_repository: InMemoryTaskRepository) -> Task:
+            """ビジネスルール違反を送出するTaskを保存する."""
+            task = BusinessRuleViolationTask(
+                title="Test Task", description="Test Description"
+            )
+            fixture_repository.save(task)
+            fixture_repository.saved_tasks.clear()
+            return task
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls,
+            fixture_repository: InMemoryTaskRepository,
+            fixture_task: Task,
+        ) -> Result:
+            """ビジネスルール違反となる実行結果を返す."""
+            use_case = CompleteTaskUseCase(task_repository=fixture_repository)
+            request = CompleteTaskRequest(task_id=str(fixture_task.id))
+            return use_case.execute(request)
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """実行結果からerrorを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_errorのcodeがbusiness_rule_violationになる(
+            self, fixture_error: Error
+        ) -> None:
+            """errorのcodeがBUSINESS_RULE_VIOLATIONになることを確認する."""
+            assert fixture_error.code is ErrorCode.BUSINESS_RULE_VIOLATION
+
+        def test_errorのmessageに例外のメッセージが設定される(
+            self, fixture_error: Error
+        ) -> None:
+            """errorのmessageが例外のメッセージになることを確認する."""
+            assert fixture_error.message == "完了できないタスクです"
+
+        def test_repositoryのtask状態が実行前に復元される(
+            self,
+            fixture_repository: InMemoryTaskRepository,
+            fixture_task: Task,
+        ) -> None:
+            """例外送出前の変更を破棄し、保存済み状態を復元する."""
+            task = fixture_repository.get(fixture_task.id)
+            assert (task.status, task.completion_notes) == (TaskStatus.TODO, None)
+
     class TestCompletedAtが設定されない場合も完了レスポンスになる:
         """completed_atがNoneでもTaskResponseに反映される."""
 
@@ -623,6 +696,25 @@ class TestCompleteTaskUseCase:
         def test_completion_dateはnoneになる(self, fixture_result: Result) -> None:
             """completed_atがNoneの場合はレスポンスのcompletion_dateもNoneになる."""
             assert fixture_result.value.completion_date is None
+
+
+class TestGetCompletedAt:
+    """_get_completed_atのテスト."""
+
+    def test_completed_atが設定されているtaskから取得できる(self) -> None:
+        """Taskに設定された完了時刻を返すことを確認する."""
+        completed_at = dt.datetime.now(tz=dt.UTC)
+        task = Task(title="Test Task", description="Test Description")
+        task.completed_at = completed_at
+        assert _get_completed_at(task) is completed_at
+
+    def test_completed_atがnoneの場合はvalue_errorになる(self) -> None:
+        """completed_atがNoneの場合にValueErrorになることを確認する."""
+        task = Task(title="Test Task", description="Test Description")
+        with pytest.raises(
+            ValueError, match="完了したTaskにcompleted_atが設定されていません。"
+        ):
+            _get_completed_at(task)
 
 
 class TestSetTaskPriorityUseCase:
