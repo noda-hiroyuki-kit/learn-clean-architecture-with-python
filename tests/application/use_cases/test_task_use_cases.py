@@ -10,6 +10,7 @@ import pytest
 
 from todo_app.application.common.result import ErrorCode
 from todo_app.application.dtos.task_dto import (
+    CompleteTaskRequest,
     CreateTaskRequest,
     SetTaskPriorityRequest,
     TaskResponse,
@@ -427,7 +428,10 @@ class TestCompleteTaskUseCase:
         ) -> Result:
             """ユースケースを実行した結果を返すフィクスチャ."""
             use_case = CompleteTaskUseCase(task_repository=fixture_repository)
-            return use_case.execute(fixture_task.id, completion_notes="完了メモ")
+            request = CompleteTaskRequest(
+                task_id=str(fixture_task.id), completion_notes="完了メモ"
+            )
+            return use_case.execute(request)
 
         @pytest.fixture
         @classmethod
@@ -453,21 +457,18 @@ class TestCompleteTaskUseCase:
         def test_valueにtaskのidが設定される(
             self, fixture_result: Result, fixture_task: Task
         ) -> None:
-            """valueにTaskのidが文字列で設定されることを確認する."""
-            assert fixture_result.value["id"] == str(fixture_task.id)
+            """valueにTaskResponseが設定されTaskのidが文字列であることを確認する."""
+            assert fixture_result.value.id == str(fixture_task.id)
 
         def test_valueのstatusがcompletedになる(self, fixture_result: Result) -> None:
-            """valueのstatusがcompletedになることを確認する."""
-            assert fixture_result.value["status"] == "completed"
+            """valueのstatusがDONEになることを確認する."""
+            assert fixture_result.value.status is TaskStatus.DONE
 
         def test_valueのcompletion_dateが完了時刻のisoformatになる(
             self, fixture_result: Result, fixture_completed_at: dt.datetime
         ) -> None:
-            """valueのcompletion_dateが完了時刻のisoformatになることを確認する."""
-            assert (
-                fixture_result.value["completion_date"]
-                == fixture_completed_at.isoformat()
-            )
+            """valueのcompletion_dateに完了時刻が設定されることを確認する."""
+            assert fixture_result.value.completion_date == fixture_completed_at
 
         def test_taskのstatusがdoneになる(self, fixture_completed_task: Task) -> None:
             """TaskのstatusがDONEになることを確認する."""
@@ -503,7 +504,7 @@ class TestCompleteTaskUseCase:
             repository = InMemoryTaskRepository()
             repository.save(fixture_task)
             use_case = CompleteTaskUseCase(task_repository=repository)
-            return use_case.execute(fixture_task.id)
+            return use_case.execute(CompleteTaskRequest(task_id=str(fixture_task.id)))
 
         @pytest.fixture
         @classmethod
@@ -538,7 +539,7 @@ class TestCompleteTaskUseCase:
         def fixture_result(cls, fixture_task_id: UUID) -> Result:
             """空のリポジトリでユースケースを実行した結果を返すフィクスチャ."""
             use_case = CompleteTaskUseCase(task_repository=InMemoryTaskRepository())
-            return use_case.execute(fixture_task_id)
+            return use_case.execute(CompleteTaskRequest(task_id=str(fixture_task_id)))
 
         @pytest.fixture
         @classmethod
@@ -575,7 +576,7 @@ class TestCompleteTaskUseCase:
             )
             repository.save(task)
             use_case = CompleteTaskUseCase(task_repository=repository)
-            return use_case.execute(task.id)
+            return use_case.execute(CompleteTaskRequest(task_id=str(task.id)))
 
         @pytest.fixture
         @classmethod
@@ -601,19 +602,27 @@ class TestCompleteTaskUseCase:
             """errorのmessageに例外のメッセージが設定されることを確認する."""
             assert fixture_error.message == "完了できないタスクです"
 
-    class TestCompletedAtが設定されない場合は例外になる:
-        """completeがcompleted_atを設定しない場合はValueErrorが送出される."""
+    class TestCompletedAtが設定されない場合も完了レスポンスになる:
+        """completed_atがNoneでもTaskResponseに反映される."""
 
-        def test_value_errorが送出される(self) -> None:
-            """completed_atがNoneのままの場合にValueErrorが送出されることを確認する."""
+        @pytest.fixture
+        @classmethod
+        def fixture_result(cls) -> Result:
+            """completed_atを設定しないTaskでユースケースを実行した結果を返す."""
             repository = InMemoryTaskRepository()
             task = NoCompletedAtTask(title="Test Task", description="Test Description")
             repository.save(task)
             use_case = CompleteTaskUseCase(task_repository=repository)
-            with pytest.raises(
-                ValueError, match="完了したTaskにcompleted_atが設定されていません。"
-            ):
-                use_case.execute(task.id)
+            request = CompleteTaskRequest(task_id=str(task.id))
+            return use_case.execute(request)
+
+        def test_実行が成功する(self, fixture_result: Result) -> None:
+            """completed_atがNoneでも実行が成功することを確認する."""
+            assert fixture_result.is_success is True
+
+        def test_completion_dateはnoneになる(self, fixture_result: Result) -> None:
+            """completed_atがNoneの場合はレスポンスのcompletion_dateもNoneになる."""
+            assert fixture_result.value.completion_date is None
 
 
 class TestSetTaskPriorityUseCase:
