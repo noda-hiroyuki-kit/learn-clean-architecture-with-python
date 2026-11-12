@@ -63,6 +63,7 @@ class CompleteTaskUseCase:
     """Taskを完了にし、関係者に通知するユースケース."""
 
     task_repository: TaskRepository
+    notification_service: NotificationPort
 
     def execute(
         self,
@@ -79,8 +80,10 @@ class CompleteTaskUseCase:
             try:
                 task.complete(notes=request.completion_notes)
                 self.task_repository.save(task)
+                self.notification_service.notify_task_completed(task)
 
                 return Result.success(TaskResponse.from_entity(task))
+
             except ValidationError, BusinessRuleViolationError:
                 # taskの状態を元に戻す
                 self.task_repository.save(task_snapshot)

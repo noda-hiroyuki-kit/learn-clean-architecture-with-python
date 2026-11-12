@@ -130,10 +130,12 @@ class SpyNotificationPort(NotificationPort):
 
     def __init__(self) -> None:
         """通知の記録領域を初期化する."""
+        self.completed_tasks: list[Task] = []
         self.high_priority_tasks: list[Task] = []
 
     def notify_task_completed(self, task: Task) -> None:
-        """タスク完了通知を何もしない."""
+        """タスク完了通知を記録する."""
+        self.completed_tasks.append(task)
 
     def notify_task_high_priority(self, task: Task) -> None:
         """高優先度タスクの通知を記録する."""
@@ -435,11 +437,23 @@ class TestCompleteTaskUseCase:
 
         @pytest.fixture
         @classmethod
+        def fixture_notification_service(cls) -> SpyNotificationPort:
+            """通知の呼び出しを記録する."""
+            return SpyNotificationPort()
+
+        @pytest.fixture
+        @classmethod
         def fixture_result(
-            cls, fixture_repository: InMemoryTaskRepository, fixture_task: Task
+            cls,
+            fixture_repository: InMemoryTaskRepository,
+            fixture_task: Task,
+            fixture_notification_service: SpyNotificationPort,
         ) -> Result:
             """ユースケースを実行した結果を返すフィクスチャ."""
-            use_case = CompleteTaskUseCase(task_repository=fixture_repository)
+            use_case = CompleteTaskUseCase(
+                task_repository=fixture_repository,
+                notification_service=fixture_notification_service,
+            )
             request = CompleteTaskRequest(
                 task_id=str(fixture_task.id), completion_notes="完了メモ"
             )
@@ -500,6 +514,16 @@ class TestCompleteTaskUseCase:
             """完了したTaskがリポジトリに保存されることを確認する."""
             assert fixture_repository.saved_tasks == [fixture_completed_task]
 
+        def test_task完了通知が送信される(
+            self,
+            fixture_notification_service: SpyNotificationPort,
+            fixture_completed_task: Task,
+        ) -> None:
+            """完了したTaskが通知サービスに渡されることを確認する."""
+            assert fixture_notification_service.completed_tasks == [
+                fixture_completed_task
+            ]
+
     class TestNotesを指定せずに完了できる:
         """notesを指定せずにTaskを完了できる."""
 
@@ -515,7 +539,10 @@ class TestCompleteTaskUseCase:
             """notesを指定せずにユースケースを実行した結果を返すフィクスチャ."""
             repository = InMemoryTaskRepository()
             repository.save(fixture_task)
-            use_case = CompleteTaskUseCase(task_repository=repository)
+            use_case = CompleteTaskUseCase(
+                task_repository=repository,
+                notification_service=SpyNotificationPort(),
+            )
             return use_case.execute(CompleteTaskRequest(task_id=str(fixture_task.id)))
 
         @pytest.fixture
@@ -550,7 +577,10 @@ class TestCompleteTaskUseCase:
         @classmethod
         def fixture_result(cls, fixture_task_id: UUID) -> Result:
             """空のリポジトリでユースケースを実行した結果を返すフィクスチャ."""
-            use_case = CompleteTaskUseCase(task_repository=InMemoryTaskRepository())
+            use_case = CompleteTaskUseCase(
+                task_repository=InMemoryTaskRepository(),
+                notification_service=SpyNotificationPort(),
+            )
             return use_case.execute(CompleteTaskRequest(task_id=str(fixture_task_id)))
 
         @pytest.fixture
@@ -587,7 +617,10 @@ class TestCompleteTaskUseCase:
                 title="Test Task", description="Test Description"
             )
             repository.save(task)
-            use_case = CompleteTaskUseCase(task_repository=repository)
+            use_case = CompleteTaskUseCase(
+                task_repository=repository,
+                notification_service=SpyNotificationPort(),
+            )
             return use_case.execute(CompleteTaskRequest(task_id=str(task.id)))
 
         @pytest.fixture
@@ -642,7 +675,10 @@ class TestCompleteTaskUseCase:
             fixture_task: Task,
         ) -> Result:
             """ビジネスルール違反となる実行結果を返す."""
-            use_case = CompleteTaskUseCase(task_repository=fixture_repository)
+            use_case = CompleteTaskUseCase(
+                task_repository=fixture_repository,
+                notification_service=SpyNotificationPort(),
+            )
             request = CompleteTaskRequest(task_id=str(fixture_task.id))
             return use_case.execute(request)
 
@@ -685,7 +721,10 @@ class TestCompleteTaskUseCase:
             repository = InMemoryTaskRepository()
             task = NoCompletedAtTask(title="Test Task", description="Test Description")
             repository.save(task)
-            use_case = CompleteTaskUseCase(task_repository=repository)
+            use_case = CompleteTaskUseCase(
+                task_repository=repository,
+                notification_service=SpyNotificationPort(),
+            )
             request = CompleteTaskRequest(task_id=str(task.id))
             return use_case.execute(request)
 
