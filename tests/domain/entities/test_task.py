@@ -6,7 +6,7 @@ import datetime as dt
 
 import pytest
 
-from todo_app.domain.entities.task import Task
+from todo_app.domain.entities.task import COMPLETION_NOTES_MAX_LENGTH, Task
 from todo_app.domain.value_object import Deadline, Priority, TaskStatus
 
 
@@ -173,6 +173,23 @@ class TestTask:
             """notesを指定せずにcompleteするとcompletion_notesがNoneのままであることを確認する."""
             fixture_task.complete()
             assert fixture_task.completion_notes is None
+
+        def test最大長のnotesを指定してcompleteできる(self, fixture_task: Task) -> None:
+            """最大長ちょうどのnotesでTaskを完了できることを確認する."""
+            notes = "a" * COMPLETION_NOTES_MAX_LENGTH
+            fixture_task.complete(notes=notes)
+            assert fixture_task.completion_notes == notes
+
+        def test最大長を超えるnotesを指定するとvalue_errorになる(
+            self, fixture_task: Task
+        ) -> None:
+            """最大長を超えるnotesはValueErrorになることを確認する."""
+            notes = "a" * (COMPLETION_NOTES_MAX_LENGTH + 1)
+            with pytest.raises(
+                ValueError,
+                match=f"完了ノートは{COMPLETION_NOTES_MAX_LENGTH}文字以内である必要があります",
+            ):
+                fixture_task.complete(notes=notes)
 
         def test_期限を過ぎていないときはis_overdueはFalseになる(
             self, fixture_task: Task

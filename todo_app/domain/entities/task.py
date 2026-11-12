@@ -15,6 +15,8 @@ from todo_app.domain.value_object import Deadline, Priority, TaskStatus
 if TYPE_CHECKING:
     from uuid import UUID
 
+COMPLETION_NOTES_MAX_LENGTH = 1000
+
 
 @dataclass
 class Task(Entity):
@@ -54,6 +56,10 @@ class Task(Entity):
         """
         if self.status == TaskStatus.DONE:
             msg = "Taskは既に完了しています。"
+            raise ValueError(msg)
+        if notes and len(notes) > COMPLETION_NOTES_MAX_LENGTH:
+            msg = "完了ノートは"
+            msg += f"{COMPLETION_NOTES_MAX_LENGTH}文字以内である必要があります"
             raise ValueError(msg)
         self.status = TaskStatus.DONE
         self.completed_at = dt.datetime.now(tz=dt.UTC)
