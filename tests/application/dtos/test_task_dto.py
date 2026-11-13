@@ -133,7 +133,7 @@ class TestCreateTaskRequest:
                 )
 
     class Test検証エラーになる:
-        """不正な優先度は生成時に拒否される."""
+        """不正な優先度やプロジェクトIDは生成時に拒否される."""
 
         @pytest.mark.parametrize("priority", ["", " \t", "UNKNOWN"])
         def test_無効な優先度は拒否される(self, priority: str) -> None:
@@ -143,6 +143,13 @@ class TestCreateTaskRequest:
                 match=r"^優先度は次のいずれかである必要があります: LOW, MEDIUM, HIGH$",
             ):
                 CreateTaskRequest(title="タスク", description="", priority=priority)
+
+        def test_uuid形式でないproject_idは拒否される(self) -> None:
+            """UUID形式でないproject_idは生成時にValueErrorになる."""
+            with pytest.raises(ValueError, match="プロジェクト ID の形式が無効です"):
+                CreateTaskRequest(
+                    title="タスク", description="", project_id="not-a-uuid"
+                )
 
     class TestToExecutionParamsでパラメータに変換できる:
         """入力を正規化してユースケースのパラメータへ変換する."""
@@ -235,16 +242,6 @@ class TestCreateTaskRequest:
             )
             with pytest.raises(
                 ValueError, match="期限は現在時刻以降でなければなりません"
-            ):
-                request.to_execution_params()
-
-        def test_不正なproject_idは拒否される(self) -> None:
-            """UUID形式でないプロジェクトIDはValueErrorになる."""
-            request = CreateTaskRequest(
-                title="タスク", description="", project_id="not-a-uuid"
-            )
-            with pytest.raises(
-                ValueError, match="badly formed hexadecimal UUID string"
             ):
                 request.to_execution_params()
 

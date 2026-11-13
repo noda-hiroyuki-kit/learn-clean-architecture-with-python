@@ -61,6 +61,12 @@ class CreateTaskRequest:
                 msg = "優先度は次のいずれかである必要があります: "
                 msg += f"{', '.join(p.name for p in Priority)}"
                 raise ValueError(msg) from None
+        if self.project_id:
+            try:
+                UUID(self.project_id)
+            except ValueError:
+                msg = "プロジェクト ID の形式が無効です"
+                raise ValueError(msg) from None
 
     def to_execution_params(self) -> dict:
         """リクエストデータをユースケースのパラメータに変換する."""
