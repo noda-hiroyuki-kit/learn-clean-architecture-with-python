@@ -18,7 +18,7 @@ from todo_app.application.dtos.project_dto import (
 from todo_app.application.dtos.task_dto import TaskResponse
 from todo_app.domain.entities.project import Project
 from todo_app.domain.entities.task import Task
-from todo_app.domain.exceptions import ValidationError
+from todo_app.domain.exceptions import BusinessRuleViolationError, ValidationError
 
 if TYPE_CHECKING:
     from typing import Any
@@ -232,11 +232,11 @@ class TestProjectResponse:
             """完了状態が列挙型の文字列値に変換されることを確認する."""
             assert fixture_response.status == "COMPLETED"
 
-        def test_completed_dateが日時のまま保持される(
+        def test_completion_dateが日時のまま保持される(
             self, fixture_response: ProjectResponse
         ) -> None:
             """完了日時がタイムゾーンとマイクロ秒を含めて保持される."""
-            assert fixture_response.completed_date == dt.datetime(
+            assert fixture_response.completion_date == dt.datetime(
                 2026, 11, 1, 10, 20, 30, 123456, tzinfo=dt.UTC
             )
 
@@ -250,7 +250,7 @@ class TestProjectResponse:
 
         @pytest.mark.parametrize(
             "field_name",
-            ["id", "name", "description", "status", "completed_date", "tasks"],
+            ["id", "name", "description", "status", "completion_date", "tasks"],
         )
         def test_フィールドを変更できない(
             self, fixture_response: ProjectResponse, field_name: str
@@ -274,11 +274,11 @@ class TestProjectResponse:
             """未完了プロジェクトのstatusがACTIVEになることを確認する."""
             assert fixture_response.status == "ACTIVE"
 
-        def test_completed_dateがnoneになる(
+        def test_completion_dateがnoneになる(
             self, fixture_response: ProjectResponse
         ) -> None:
             """完了日時が未設定の場合はNoneになることを確認する."""
-            assert fixture_response.completed_date is None
+            assert fixture_response.completion_date is None
 
         def test_tasksが空リストになる(self, fixture_response: ProjectResponse) -> None:
             """タスクがない場合は空リストになることを確認する."""
@@ -323,11 +323,11 @@ class TestCompleteProjectResponse:
             """プロジェクトのstatusが列挙型の値に変換されることを確認する."""
             assert fixture_response.status == "COMPLETED"
 
-        def test_completion_dateがiso形式に変換される(
+        def test_completion_dateにタイムゾーンとマイクロ秒が設定される(
             self, fixture_response: CompleteProjectResponse
         ) -> None:
-            """完了日時がタイムゾーンとマイクロ秒を含むISO形式になることを確認する."""
-            expected_date = "2026-01-02T03:04:05.123456+00:00"
+            """完了日時にタイムゾーンとマイクロ秒が設定されることを確認する."""
+            expected_date = dt.datetime(2026, 1, 2, 3, 4, 5, 123456, tzinfo=dt.UTC)
             assert fixture_response.completion_date == expected_date
 
         def test_task_countが設定される(
@@ -379,5 +379,8 @@ class TestCompleteProjectResponse:
         def test_未完了の場合はvalue_errorになる(self) -> None:
             """完了日時がないプロジェクトの場合はValueErrorになることを確認する."""
             project = Project(name="未完了プロジェクト")
-            with pytest.raises(ValueError, match="プロジェクトは完了していません"):
+            with pytest.raises(
+                BusinessRuleViolationError,
+                match="プロジェクトの完了日が設定されていません",
+            ):
                 CompleteProjectResponse.from_entity(project)

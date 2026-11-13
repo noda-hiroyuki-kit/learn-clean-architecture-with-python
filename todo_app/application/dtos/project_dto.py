@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Self
 from uuid import UUID
 
 from todo_app.application.dtos.task_dto import TaskResponse
-from todo_app.domain.exceptions import ValidationError
+from todo_app.domain.exceptions import BusinessRuleViolationError, ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -63,7 +63,7 @@ class ProjectResponse:
     name: str
     description: str
     status: str
-    completed_date: datetime | None
+    completion_date: datetime | None
     tasks: Sequence[TaskResponse]
 
     @classmethod
@@ -74,7 +74,7 @@ class ProjectResponse:
             name=project.name,
             description=project.description,
             status=project.status.value,
-            completed_date=project.completed_at or None,
+            completion_date=project.completed_at or None,
             tasks=[TaskResponse.from_entity(t) for t in project.tasks],
         )
 
@@ -85,7 +85,7 @@ class CompleteProjectResponse:
 
     id: str
     status: str
-    completion_date: str
+    completion_date: datetime
     task_count: int
     completion_notes: str | None
 
@@ -93,12 +93,12 @@ class CompleteProjectResponse:
     def from_entity(cls, project: Project) -> Self:
         """ドメインエンティティからレスポンスを生成."""
         if project.completed_at is None:
-            msg = "プロジェクトは完了していません"
-            raise ValueError(msg)
+            msg = "プロジェクトの完了日が設定されていません"
+            raise BusinessRuleViolationError(msg)
         return cls(
             id=str(project.id),
             status=project.status.value,
-            completion_date=project.completed_at.isoformat(),
+            completion_date=project.completed_at,
             task_count=len(project.tasks),
             completion_notes=project.completion_notes,
         )

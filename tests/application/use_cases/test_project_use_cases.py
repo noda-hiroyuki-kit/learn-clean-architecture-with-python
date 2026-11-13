@@ -246,7 +246,7 @@ class TestCreateProjectUseCase:
             self, fixture_response: ProjectResponse
         ) -> None:
             """作成時の完了日時が未設定であることを確認する."""
-            assert fixture_response.completed_date is None
+            assert fixture_response.completion_date is None
 
         def test_作成時のタスク一覧は空になる(
             self, fixture_response: ProjectResponse
@@ -476,7 +476,7 @@ class TestCompleteProjectUseCase:
             fixture_completed_at: dt.datetime,
         ) -> None:
             """valueのcompletion_dateがProjectの完了時刻のISO形式になることを確認する."""
-            assert fixture_response.completion_date == fixture_completed_at.isoformat()
+            assert fixture_response.completion_date == fixture_completed_at
 
         def test_valueのtask_countがタスク数になる(
             self, fixture_response: CompleteProjectResponse
