@@ -133,13 +133,7 @@ class TestCreateTaskRequest:
                 )
 
     class Test検証エラーになる:
-        """不正なタイトルや優先度は生成時に拒否される."""
-
-        @pytest.mark.parametrize("title", ["", "   ", "\t\n", "\u3000"])
-        def test_空のタイトルは拒否される(self, title: str) -> None:
-            """空文字または空白のみのタイトルはValueErrorになる."""
-            with pytest.raises(ValueError, match=r"^タイトルが必要です$"):
-                CreateTaskRequest(title=title, description="")
+        """不正な優先度は生成時に拒否される."""
 
         @pytest.mark.parametrize("priority", ["", " \t", "UNKNOWN"])
         def test_無効な優先度は拒否される(self, priority: str) -> None:

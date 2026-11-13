@@ -54,9 +54,6 @@ class CreateTaskRequest:
 
     def __post_init__(self) -> None:
         """リクエストデータを検証する."""
-        if not self.title.strip():
-            msg = "タイトルが必要です"
-            raise ValueError(msg)
         if self.priority is not None:
             try:
                 _normalize_priority(self.priority)

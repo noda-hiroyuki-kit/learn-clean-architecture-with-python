@@ -15,6 +15,8 @@ from todo_app.domain.value_object import Deadline, Priority, TaskStatus
 if TYPE_CHECKING:
     from uuid import UUID
 
+TITLE_MAX_LENGTH = 200
+DESCRIPTION_MAX_LENGTH = 2000
 COMPLETION_NOTES_MAX_LENGTH = 1000
 
 
@@ -30,6 +32,18 @@ class Task(Entity):
     completed_at: dt.datetime | None = field(default=None, init=False)
     completion_notes: str | None = field(default=None, init=False)
     project_id: UUID | None = field(default=None, init=False)
+
+    def __post_init__(self) -> None:
+        """エンティティの初期化後に検証を行う."""
+        if not self.title.strip():
+            msg = "タイトルが必要です"
+            raise ValueError(msg)
+        if len(self.title) > TITLE_MAX_LENGTH:
+            msg = f"タイトルは{TITLE_MAX_LENGTH}文字以内である必要があります"
+            raise ValueError(msg)
+        if len(self.description) > DESCRIPTION_MAX_LENGTH:
+            msg = f"説明は{DESCRIPTION_MAX_LENGTH}文字以内である必要があります"
+            raise ValueError(msg)
 
     def start(self) -> None:
         """Taskを開始する.

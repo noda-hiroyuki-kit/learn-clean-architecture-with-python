@@ -6,7 +6,12 @@ import datetime as dt
 
 import pytest
 
-from todo_app.domain.entities.task import COMPLETION_NOTES_MAX_LENGTH, Task
+from todo_app.domain.entities.task import (
+    COMPLETION_NOTES_MAX_LENGTH,
+    DESCRIPTION_MAX_LENGTH,
+    TITLE_MAX_LENGTH,
+    Task,
+)
 from todo_app.domain.value_object import Deadline, Priority, TaskStatus
 
 
@@ -58,6 +63,43 @@ class TestTask:
         ) -> None:
             """completion_notesが既定でNoneに設定されることを確認する."""
             assert fixture_task.completion_notes is None
+
+        def test最大長ちょうどのtitleで生成できる(self) -> None:
+            """最大長ちょうどのtitleでTaskを生成できることを確認する."""
+            title = "a" * TITLE_MAX_LENGTH
+            task = Task(title=title, description="")
+            assert task.title == title
+
+        def test最大長ちょうどのdescriptionで生成できる(self) -> None:
+            """最大長ちょうどのdescriptionでTaskを生成できることを確認する."""
+            description = "a" * DESCRIPTION_MAX_LENGTH
+            task = Task(title="タスク", description=description)
+            assert task.description == description
+
+    class Test検証エラーになる:
+        """不正なtitleやdescriptionは生成時に拒否される."""
+
+        @pytest.mark.parametrize("title", ["", "   ", "\t\n", "\u3000"])
+        def test空のtitleはvalue_errorになる(self, title: str) -> None:
+            """空文字または空白のみのtitleはValueErrorになることを確認する."""
+            with pytest.raises(ValueError, match=r"^タイトルが必要です$"):
+                Task(title=title, description="")
+
+        def test_titleが最大長を超えるとvalue_errorになる(self) -> None:
+            """titleが最大長を超える場合はValueErrorになることを確認する."""
+            with pytest.raises(
+                ValueError,
+                match=f"タイトルは{TITLE_MAX_LENGTH}文字以内である必要があります",
+            ):
+                Task(title="a" * (TITLE_MAX_LENGTH + 1), description="")
+
+        def test_descriptionが最大長を超えるとvalue_errorになる(self) -> None:
+            """descriptionが最大長を超える場合はValueErrorになることを確認する."""
+            with pytest.raises(
+                ValueError,
+                match=f"説明は{DESCRIPTION_MAX_LENGTH}文字以内である必要があります",
+            ):
+                Task(title="タスク", description="a" * (DESCRIPTION_MAX_LENGTH + 1))
 
     class TestTaskのメソッドのテスト:
         """Taskのメソッドに関するテスト."""
