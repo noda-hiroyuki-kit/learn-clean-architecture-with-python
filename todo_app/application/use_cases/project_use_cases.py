@@ -5,6 +5,7 @@
 # Copyright (c) 2026 Noda Hiroyuki.
 """Projectに関連するユースケースを定義するモジュール."""
 
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -92,24 +93,35 @@ class CompleteProjectUseCase:
         """
         try:
             params = request.to_execution_params()
-
-            # Validate project exists
             project = self.project_repository.get(params["project_id"])
-            project.mark_completed(notes=params["completion_notes"])
 
-            # 未完了タスクをすべて完了にする
-            for task in project.incomplete_tasks:
-                task.complete()
-                self.task_repository.save(task)
-                self.notification_service.notify_task_completed(task)
+            # 初期の状態をスナップショットとして保存
+            project_snapshot = deepcopy(project)
+            task_snapshots = {
+                task.id: deepcopy(task) for task in project.incomplete_tasks
+            }
 
-            # Complete the project itself
-            project.mark_completed(notes=params["completion_notes"])
-            self.project_repository.save(project)
-            response = CompleteProjectResponse.from_entity(project)
-            return Result.success(response)
+            try:
+                # 全ての未完了タスクを完了にする
+                for task in project.incomplete_tasks:
+                    task.complete()
+                    self.task_repository.save(task)
+
+                project.mark_completed(notes=params["completion_notes"])
+
+                self.project_repository.save(project)
+                for task in project_snapshot.incomplete_tasks:
+                    self.notification_service.notify_task_completed(task)
+                return Result.success(CompleteProjectResponse.from_entity(project))
+            except ValidationError, BusinessRuleViolationError:
+                for task_snapshot in task_snapshots.values():
+                    self.task_repository.save(task_snapshot)
+                self.project_repository.save(project_snapshot)
+                raise
 
         except ProjectNotFoundError:
             return Result.failure(Error.not_found("Project", str(params["project_id"])))
         except ValidationError as e:
             return Result.failure(Error.validation_error(str(e)))
+        except BusinessRuleViolationError as e:
+            return Result.failure(Error.business_rule_violation(str(e)))

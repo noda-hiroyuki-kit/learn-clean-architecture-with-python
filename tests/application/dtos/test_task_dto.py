@@ -144,12 +144,11 @@ class TestCreateTaskRequest:
             ):
                 CreateTaskRequest(title="タスク", description="", priority=priority)
 
-        def test_uuid形式でないproject_idは拒否される(self) -> None:
+        @pytest.mark.parametrize("project_id", ["not-a-uuid", "   "])
+        def test_uuid形式でないproject_idは拒否される(self, project_id: str) -> None:
             """UUID形式でないproject_idは生成時にValueErrorになる."""
             with pytest.raises(ValueError, match="プロジェクト ID の形式が無効です"):
-                CreateTaskRequest(
-                    title="タスク", description="", project_id="not-a-uuid"
-                )
+                CreateTaskRequest(title="タスク", description="", project_id=project_id)
 
     class TestToExecutionParamsでパラメータに変換できる:
         """入力を正規化してユースケースのパラメータへ変換する."""
