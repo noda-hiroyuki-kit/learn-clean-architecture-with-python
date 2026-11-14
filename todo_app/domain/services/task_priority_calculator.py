@@ -20,7 +20,11 @@ class TaskPriorityCalculator:
     @staticmethod
     def calculate_priority(task: Task) -> Priority | None:
         """優先度計算の未実装の雛形."""
-        if task.is_overdue():
+        if task.due_date is None:
+            return task.priority
+        if task.is_overdue() or task.due_date.time_remaining() <= dt.timedelta(
+            hours=12
+        ):
             return Priority.HIGH
         if task.due_date and task.due_date.time_remaining() <= dt.timedelta(days=2):
             return Priority.MEDIUM
