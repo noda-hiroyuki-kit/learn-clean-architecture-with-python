@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from todo_app.application.use_cases.task_use_cases import (
+    CompleteTaskRequest,
     CompleteTaskUseCase,
     CreateTaskRequest,
     CreateTaskUseCase,
@@ -44,6 +45,37 @@ class TaskController:
         try:
             request = CreateTaskRequest(title=title, description=description)
             result = self.create_use_case.execute(request)
+
+            if result.is_success:
+                view_model = self.presenter.present_task(result.value)
+                return OperationResult.succeed(view_model)
+
+            if result.error is not None:
+                error_vm = self.presenter.present_error(
+                    result.error.message, str(result.error.code.name)
+                )
+            return OperationResult.fail(error_vm.message, error_vm.code)
+
+        except ValueError as e:
+            error_vm = self.presenter.present_error(str(e), "VALIDATION_ERROR")
+            return OperationResult.fail(error_vm.message, error_vm.code)
+
+    def handle_complete(
+        self, task_id: str, notes: str | None = None
+    ) -> OperationResult[TaskViewModel]:
+        """タスク完了のリクエストを処理する.
+
+        Args:
+            task_id (str): タスクのID
+            notes (str | None): 完了時のメモ
+
+        Returns:
+            OperationResult[TaskViewModel]: タスク完了の結果
+
+        """
+        try:
+            request = CompleteTaskRequest(task_id=task_id, completion_notes=notes)
+            result = self.complete_use_case.execute(request)
 
             if result.is_success:
                 view_model = self.presenter.present_task(result.value)
