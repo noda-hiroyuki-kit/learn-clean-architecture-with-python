@@ -19,10 +19,27 @@ class TaskPresenter(ABC):
 
     @abstractmethod
     def present_task(self, task_response: TaskResponse) -> TaskViewModel:
-        """TaskResponseをTaskViewModelに変換するための抽象メソッド."""
+        """TaskResponseをTaskViewModelに変換するための抽象メソッド.
+
+        Args:
+            task_response (TaskResponse): タスクのレスポンスオブジェクト
+
+        Returns:
+            TaskViewModel: タスクのビュー モデル
+
+        """
         raise NotImplementedError
 
     @abstractmethod
     def present_error(self, error_msg: str, code: str | None = None) -> ErrorViewModel:
-        """エラー情報をErrorViewModelに変換するための抽象メソッド."""
+        """エラー情報をErrorViewModelに変換するための抽象メソッド.
+
+        Args:
+            error_msg (str): エラーメッセージ
+            code (str | None): エラーコード
+
+        Returns:
+            ErrorViewModel: エラー情報
+
+        """
         raise NotImplementedError
