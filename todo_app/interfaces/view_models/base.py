@@ -18,7 +18,7 @@ class ErrorViewModel:
 
 @dataclass
 class OperationResult[T]:
-    """操作結果のビュー モデルの基底クラス."""
+    """操作結果のビュー モデルクラス."""
 
     _success: T | None = None
     _error: ErrorViewModel | None = None
@@ -32,9 +32,57 @@ class OperationResult[T]:
             success (T | None): 成功した操作結果の値
             error (ErrorViewModel | None): エラー情報
 
+        Raises:
+            ValueError:
+                成功またはエラーのどちらか一方が指定されていない場合、または両方が指定された場合
+
         """
+        if (success is None and error is None) or (
+            success is not None and error is not None
+        ):
+            msg = (
+                "成功またはエラーのどちらか一方を指定してください(両方は指定できません)"
+            )
+            raise ValueError(msg)
         self._success = success
         self._error = error
+
+    @property
+    def is_success(self) -> bool:
+        """操作が成功したかどうかを返す."""
+        return self._success is not None
+
+    @property
+    def success(self) -> T:
+        """成功した操作結果の値を返す.
+
+        Returns:
+            T: 成功した操作結果の値
+
+        Raises:
+            ValueError: 操作が失敗しており、成功した結果が存在しない場合
+
+        """
+        if self._success is None:
+            msg = "操作は失敗しており、成功した結果は存在しません"
+            raise ValueError(msg)
+        return self._success
+
+    @property
+    def error(self) -> ErrorViewModel:
+        """エラー情報を返す.
+
+        Returns:
+            ErrorViewModel: エラー情報
+
+        Raises:
+            ValueError: 操作が成功しており、エラー情報が存在しない場合
+
+        """
+        if self._error is None:
+            msg = "操作は成功しており、エラー情報は存在しません"
+            raise ValueError(msg)
+        return self._error
 
     @classmethod
     def succeed(cls, value: T) -> OperationResult[T]:
