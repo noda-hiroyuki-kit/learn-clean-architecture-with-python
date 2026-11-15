@@ -12,4 +12,11 @@ from dataclasses import dataclass
 class TaskViewModel:
     """タスクのビュー モデル."""
 
-    dummy: int
+    id: str
+    title: str
+    description: str
+    status_display: str  # 人が読める status
+    priority_display: str  # 人が読める priority
+    due_date_display: str | None  # フォーマット済み日付文字列
+    project_display: str | None  # プロジェクト名(存在する場合)
+    completion_info: str | None  # フォーマット済み完了情報
