@@ -14,6 +14,7 @@
         "addopts",
         "celerybeat",
         "charliermarsh",
+        "cls",
         "codz",
         "Connor",
         "direnv",

@@ -331,9 +331,13 @@ class TestCreateProjectUseCase:
             """検証エラー時には保存処理が行われないことを確認する."""
             assert fixture_repository.saved_projects == []
 
-        def test_成功値が返されない(self, fixture_result: Result) -> None:
-            """検証エラー時に成功値が設定されないことを確認する."""
-            assert fixture_result.value is None
+        def test_成功値を取得すると例外になる(self, fixture_result: Result) -> None:
+            """検証エラー結果から成功値を取得できないことを確認する."""
+            with pytest.raises(
+                ValueError,
+                match="エラー結果から値にアクセスすることはできません。",
+            ):
+                _ = fixture_result.value
 
     class Testビジネスルール違反の場合は失敗する:
         """保存時のビジネスルール違反を失敗結果に変換する."""
@@ -359,9 +363,13 @@ class TestCreateProjectUseCase:
             """ビジネスルール違反のメッセージが保持されることを確認する."""
             assert fixture_error.message == "テストプロジェクトは作成できません"
 
-        def test_成功値が返されない(self, fixture_result: Result) -> None:
-            """保存失敗時に成功値が設定されないことを確認する."""
-            assert fixture_result.value is None
+        def test_成功値を取得すると例外になる(self, fixture_result: Result) -> None:
+            """保存失敗結果から成功値を取得できないことを確認する."""
+            with pytest.raises(
+                ValueError,
+                match="エラー結果から値にアクセスすることはできません。",
+            ):
+                _ = fixture_result.value
 
 
 class TestCompleteProjectUseCase:

@@ -47,23 +47,67 @@ class Error:
 
 
 @dataclass(frozen=True)
-class Result:
-    """ユースケースの実行が成功したか失敗したかを表す."""
+class Result[T]:
+    """ユースケースの実行結果を表すクラス.
 
-    value: Any = None
-    error: Error | None = None
+    成功時は_valueに値が設定され、_errorはNone。
+    失敗時は_errorにエラーが設定され、_valueはNone。
+    """
+
+    _value: T | None = None
+    _error: Error | None = None
+
+    def __post_init__(self) -> None:
+        """値とエラーの整合性をチェックする."""
+        if (self._value is None and self._error is None) or (
+            self._value is not None and self._error is not None
+        ):
+            msg = "値またはエラーのどちらか一方だけを設定してください。"
+            raise ValueError(msg)
 
     @property
     def is_success(self) -> bool:
         """ユースケースの実行が成功したかどうかを返す."""
-        return self.error is None
+        return self._error is None
+
+    @property
+    def value(self) -> T:
+        """成功結果から値を取得する.
+
+        Raises:
+            ValueError: エラー結果から値にアクセスしようとした場合
+
+        Returns:
+            T: 成功結果の値
+
+        """
+        if self._value is None:
+            msg = "エラー結果から値にアクセスすることはできません。"
+            raise ValueError(msg)
+        return self._value
+
+    @property
+    def error(self) -> Error:
+        """失敗結果からエラーを取得する.
+
+        Raises:
+            ValueError: 成功結果からエラーにアクセスしようとした場合
+
+        Returns:
+            Error: 失敗結果のエラー
+
+        """
+        if self._error is None:
+            msg = "成功結果からエラーにアクセスすることはできません。"
+            raise ValueError(msg)
+        return self._error
 
     @classmethod
-    def success(cls, value: Any) -> Self:  # noqa: ANN401
+    def success(cls, value: T) -> Result[T]:
         """成功結果を生成する."""
-        return cls(value=value)
+        return cls(_value=value)
 
     @classmethod
-    def failure(cls, error: Error) -> Self:
+    def failure(cls, error: Error) -> Result[T]:
         """失敗結果を生成する."""
-        return cls(error=error)
+        return cls(_error=error)
