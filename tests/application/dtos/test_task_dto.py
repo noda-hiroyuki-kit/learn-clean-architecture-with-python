@@ -13,6 +13,7 @@ from todo_app.application.dtos.task_dto import (
     CreateTaskRequest,
     SetTaskPriorityRequest,
     TaskResponse,
+    UpdateTaskRequest,
 )
 from todo_app.domain.entities.task import Task
 from todo_app.domain.value_object import Deadline, Priority, TaskStatus
@@ -429,3 +430,17 @@ class TestSetTaskPriorityRequest:
                 "task_id": UUID(TASK_ID),
                 "priority": expected_priority,
             }
+
+
+class TestUpdateTaskRequest:
+    """UpdateTaskRequestのテスト."""
+
+    class TestToExecutionParamsで期限を変換できる:
+        """to_execution_paramsで期限をUTCに変換できる."""
+
+        def testタイムゾーンのない期限はUTCとして扱われる(self) -> None:
+            """タイムゾーンのない期限にUTCを設定する."""
+            request = UpdateTaskRequest(task_id=TASK_ID, due_date="2099-01-01T12:00:00")
+            assert request.to_execution_params()["deadline"] == Deadline(
+                datetime(2099, 1, 1, 12, tzinfo=UTC)
+            )
