@@ -12,11 +12,13 @@ from todo_app.application.dtos.task_dto import (
     CompleteTaskRequest,
     CreateTaskRequest,
     TaskResponse,
+    UpdateTaskRequest,
 )
 from todo_app.application.use_cases.task_use_cases import (
     CompleteTaskUseCase,
     CreateTaskUseCase,
     GetTaskUseCase,
+    UpdateTaskUseCase,
 )
 from todo_app.domain.value_object import Priority, TaskStatus
 from todo_app.interfaces.controllers.task_controller import TaskController
@@ -40,6 +42,7 @@ class TestTaskController:
                 create_use_case=Mock(spec=CreateTaskUseCase),
                 get_use_case=get_use_case,
                 complete_use_case=Mock(spec=CompleteTaskUseCase),
+                update_use_case=Mock(spec=UpdateTaskUseCase),
                 presenter=presenter,
             )
             return controller, get_use_case, presenter
@@ -142,6 +145,7 @@ class TestTaskController:
                 create_use_case=create_use_case,
                 get_use_case=Mock(spec=GetTaskUseCase),
                 complete_use_case=complete_use_case,
+                update_use_case=Mock(spec=UpdateTaskUseCase),
                 presenter=presenter,
             )
             return controller, create_use_case, presenter
@@ -239,6 +243,7 @@ class TestTaskController:
                 create_use_case=create_use_case,
                 get_use_case=Mock(spec=GetTaskUseCase),
                 complete_use_case=complete_use_case,
+                update_use_case=Mock(spec=UpdateTaskUseCase),
                 presenter=presenter,
             )
             return controller, complete_use_case, presenter
@@ -328,4 +333,151 @@ class TestTaskController:
             ) == (
                 error_view_model,
                 call("タスク ID の形式が無効です", "VALIDATION_ERROR"),
+            )
+
+    class TestHandleUpdate:
+        """handle_updateのテスト."""
+
+        @pytest.fixture
+        def fixture_controller(self) -> tuple[TaskController, Mock, Mock]:
+            """テスト用のTaskControllerを生成する."""
+            update_use_case = Mock(spec=UpdateTaskUseCase)
+            presenter = Mock(spec=TaskPresenter)
+            controller = TaskController(
+                create_use_case=Mock(spec=CreateTaskUseCase),
+                get_use_case=Mock(spec=GetTaskUseCase),
+                complete_use_case=Mock(spec=CompleteTaskUseCase),
+                update_use_case=update_use_case,
+                presenter=presenter,
+            )
+            return controller, update_use_case, presenter
+
+        def test_更新成功時に表示モデルを返す(
+            self, fixture_controller: tuple[TaskController, Mock, Mock]
+        ) -> None:
+            """更新結果を表示モデルに変換して返すことを確認する."""
+            controller, update_use_case, presenter = fixture_controller
+            task_id = "12345678-1234-5678-1234-567812345678"
+            response = TaskResponse(
+                id=task_id,
+                title="更新後のタスク",
+                description="更新後の説明",
+                status=TaskStatus.DONE,
+                priority=Priority.HIGH,
+            )
+            view_model = TaskViewModel(
+                id=task_id,
+                title="更新後のタスク",
+                description="更新後の説明",
+                status_display="完了",
+                priority_display="高",
+                due_date_display=None,
+                project_display=None,
+                completion_info=None,
+            )
+            update_use_case.execute.return_value = Result.success(response)
+            presenter.present_task.return_value = view_model
+
+            result = controller.handle_update(
+                task_id,
+                title="更新後のタスク",
+                description="更新後の説明",
+                status="done",
+                priority="high",
+            )
+
+            assert (
+                result.success,
+                update_use_case.execute.call_args,
+                presenter.present_task.call_args,
+            ) == (
+                view_model,
+                call(
+                    UpdateTaskRequest(
+                        task_id=task_id,
+                        title="更新後のタスク",
+                        description="更新後の説明",
+                        status=TaskStatus.DONE,
+                        priority=Priority.HIGH,
+                    )
+                ),
+                call(response),
+            )
+
+        def test_ユースケースの失敗を表示モデルに変換する(
+            self, fixture_controller: tuple[TaskController, Mock, Mock]
+        ) -> None:
+            """ユースケースのエラーを表示モデルに変換して返すことを確認する."""
+            controller, update_use_case, presenter = fixture_controller
+            error = Error.validation_error("入力が不正です")
+            error_view_model = ErrorViewModel(
+                message="入力が不正です", code="VALIDATION_ERROR"
+            )
+            update_use_case.execute.return_value = Result.failure(error)
+            presenter.present_error.return_value = error_view_model
+
+            result = controller.handle_update(
+                "12345678-1234-5678-1234-567812345678", title="更新後のタスク"
+            )
+
+            assert (
+                result.error,
+                presenter.present_error.call_args,
+            ) == (
+                error_view_model,
+                call("入力が不正です", "VALIDATION_ERROR"),
+            )
+
+        @pytest.mark.parametrize(
+            ("status", "priority"),
+            [("invalid", None), (None, "invalid")],
+        )
+        def test_無効なstatusまたはpriorityを検証エラーに変換する(
+            self,
+            fixture_controller: tuple[TaskController, Mock, Mock],
+            status: str | None,
+            priority: str | None,
+        ) -> None:
+            """無効な列挙値を検証エラーとして返すことを確認する."""
+            controller, update_use_case, presenter = fixture_controller
+            error_view_model = ErrorViewModel(
+                message="'INVALID'", code="VALIDATION_ERROR"
+            )
+            presenter.present_error.return_value = error_view_model
+
+            result = controller.handle_update(
+                "12345678-1234-5678-1234-567812345678",
+                status=status,
+                priority=priority,
+            )
+
+            assert (
+                result.error,
+                update_use_case.execute.call_args,
+                presenter.present_error.call_args,
+            ) == (
+                error_view_model,
+                None,
+                call("'INVALID'", "VALIDATION_ERROR"),
+            )
+
+        def testユースケースのvalue_errorを検証エラーに変換する(
+            self, fixture_controller: tuple[TaskController, Mock, Mock]
+        ) -> None:
+            """ユースケースのValueErrorを検証エラーとして返すことを確認する."""
+            controller, update_use_case, presenter = fixture_controller
+            update_use_case.execute.side_effect = ValueError("タスク ID が不正です")
+            error_view_model = ErrorViewModel(
+                message="タスク ID が不正です", code="VALIDATION_ERROR"
+            )
+            presenter.present_error.return_value = error_view_model
+
+            result = controller.handle_update("12345678-1234-5678-1234-567812345678")
+
+            assert (
+                result.error,
+                presenter.present_error.call_args,
+            ) == (
+                error_view_model,
+                call("タスク ID が不正です", "VALIDATION_ERROR"),
             )
