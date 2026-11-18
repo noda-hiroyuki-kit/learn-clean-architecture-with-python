@@ -90,6 +90,10 @@ class InMemoryProjectRepository(ProjectRepository):
         except KeyError as e:
             raise ProjectNotFoundError(project_id) from e
 
+    def get_all(self) -> list[Project]:
+        """保存されている全てのProjectを取得する."""
+        return list(self._projects.values())
+
     def save(self, project: Project) -> None:
         """Projectを保存する."""
         self._projects[project.id] = project

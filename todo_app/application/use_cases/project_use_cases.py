@@ -153,3 +153,25 @@ class GetProjectUseCase:
             return Result.success(ProjectResponse.from_entity(project))
         except ProjectNotFoundError:
             return Result.failure(Error.not_found("Project", project_id))
+
+
+@dataclass
+class ListProjectsUseCase:
+    """全てのプロジェクトを取得するユースケース."""
+
+    project_repository: ProjectRepository
+
+    def execute(self) -> Result[list[ProjectResponse]]:
+        """全てのプロジェクトを取得する.
+
+        Returns
+        -------
+        Result[list[ProjectResponse]]
+            ユースケースの実行結果.
+
+        """
+        try:
+            projects = self.project_repository.get_all()
+            return Result.success([ProjectResponse.from_entity(p) for p in projects])
+        except BusinessRuleViolationError as e:
+            return Result.failure(Error.business_rule_violation(str(e)))

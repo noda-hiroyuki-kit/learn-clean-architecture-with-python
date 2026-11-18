@@ -21,6 +21,7 @@ from todo_app.application.use_cases.project_use_cases import (
     CompleteProjectUseCase,
     CreateProjectUseCase,
     GetProjectUseCase,
+    ListProjectsUseCase,
 )
 from todo_app.domain.entities.project import (
     DESCRIPTION_MAX_LENGTH,
@@ -58,6 +59,10 @@ class InMemoryProjectRepository(ProjectRepository):
             return self._projects[project_id]
         except KeyError as e:
             raise ProjectNotFoundError(project_id) from e
+
+    def get_all(self) -> list[Project]:
+        """保存されている全てのProjectを取得する."""
+        return list(self._projects.values())
 
     def save(self, project: Project) -> None:
         """Projectを保存し、保存履歴に記録する."""
@@ -150,6 +155,15 @@ class BusinessRuleViolationProjectRepository(InMemoryProjectRepository):
     def save(self, project: Project) -> None:
         """指定されたプロジェクトの保存を拒否する."""
         msg = f"{project.name}は作成できません"
+        raise BusinessRuleViolationError(msg)
+
+
+class BusinessRuleViolationListProjectsRepository(InMemoryProjectRepository):
+    """一覧取得時にビジネスルール違反を送出するリポジトリ."""
+
+    def get_all(self) -> list[Project]:
+        """一覧取得を拒否する."""
+        msg = "プロジェクト一覧を取得できません"
         raise BusinessRuleViolationError(msg)
 
 
@@ -467,6 +481,107 @@ class TestGetProjectUseCase:
         ) -> None:
             """エラーメッセージにプロジェクトIDが含まれることを確認する."""
             assert str(fixture_project_id) in fixture_error.message
+
+
+class TestListProjectsUseCase:
+    """ListProjectsUseCaseのテスト."""
+
+    @pytest.fixture
+    @classmethod
+    def fixture_repository(cls) -> InMemoryProjectRepository:
+        """テスト用の空のリポジトリを返す."""
+        return InMemoryProjectRepository()
+
+    class Testプロジェクトが存在する場合:
+        """全プロジェクトをレスポンスとして取得する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_repository(cls) -> InMemoryProjectRepository:
+            """複数のプロジェクトを保存したリポジトリを返す."""
+            repository = InMemoryProjectRepository()
+            projects = [
+                Project(name="プロジェクト1", description="説明1"),
+                Project(name="プロジェクト2", description="説明2"),
+            ]
+            for project in projects:
+                repository.save(project)
+            return repository
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls, fixture_repository: InMemoryProjectRepository
+        ) -> Result:
+            """プロジェクト一覧の取得を実行した結果を返す."""
+            return ListProjectsUseCase(project_repository=fixture_repository).execute()
+
+        def test_実行が成功する(self, fixture_result: Result) -> None:
+            """プロジェクト一覧の取得が成功することを確認する."""
+            assert fixture_result.is_success is True
+
+        def test_全プロジェクトのレスポンスが返る(
+            self,
+            fixture_result: Result,
+            fixture_repository: InMemoryProjectRepository,
+        ) -> None:
+            """全てのプロジェクトが対応するレスポンスに変換されることを確認する."""
+            assert fixture_result.value == [
+                ProjectResponse.from_entity(project)
+                for project in fixture_repository.saved_projects
+            ]
+
+    class Testプロジェクトが存在しない場合:
+        """プロジェクトがない場合は空の一覧を返す."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls, fixture_repository: InMemoryProjectRepository
+        ) -> Result:
+            """空のリポジトリで一覧取得を実行した結果を返す."""
+            return ListProjectsUseCase(project_repository=fixture_repository).execute()
+
+        def test_実行が成功する(self, fixture_result: Result) -> None:
+            """空のプロジェクト一覧でも成功することを確認する."""
+            assert fixture_result.is_success is True
+
+        def test_空の一覧が返る(self, fixture_result: Result) -> None:
+            """プロジェクトがない場合は空の一覧が返ることを確認する."""
+            assert fixture_result.value == []
+
+    class Test一覧取得に失敗した場合:
+        """一覧取得時のビジネスルール違反を失敗結果に変換する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(cls) -> Result:
+            """一覧取得でビジネスルール違反になる結果を返す."""
+            return ListProjectsUseCase(
+                project_repository=BusinessRuleViolationListProjectsRepository()
+            ).execute()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """失敗結果からエラーを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_実行が失敗する(self, fixture_result: Result) -> None:
+            """ビジネスルール違反が失敗結果になることを確認する."""
+            assert fixture_result.is_success is False
+
+        def test_errorのcodeがbusiness_rule_violationになる(
+            self, fixture_error: Error
+        ) -> None:
+            """エラーコードがBUSINESS_RULE_VIOLATIONになることを確認する."""
+            assert fixture_error.code is ErrorCode.BUSINESS_RULE_VIOLATION
+
+        def test_errorのmessageが保持される(self, fixture_error: Error) -> None:
+            """ビジネスルール違反のメッセージが保持されることを確認する."""
+            assert fixture_error.message == "プロジェクト一覧を取得できません"
 
 
 class TestCompleteProjectUseCase:

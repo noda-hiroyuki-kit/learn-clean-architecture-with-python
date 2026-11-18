@@ -40,6 +40,18 @@ class ProjectRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def get_all(self) -> list[Project]:
+        """全てのProjectを取得する.
+
+        Returns
+        -------
+        list[Project]
+            全てのProjectエンティティのリスト.
+
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def save(self, project: Project) -> None:
         """Projectをリポジトリに保存する.
 
