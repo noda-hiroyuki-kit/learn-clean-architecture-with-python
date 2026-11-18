@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from todo_app.application.dtos.project_dto import (
     CompleteProjectRequest,
     CreateProjectRequest,
+    UpdateProjectRequest,
 )
 from todo_app.interfaces.view_models.base import OperationResult
 
@@ -142,3 +143,36 @@ class ProjectController:
             result.error.message, str(result.error.code.name)
         )
         return OperationResult.fail(error_vm.message, error_vm.code)
+
+    def handle_update(
+        self, project_id: str, name: str | None = None, description: str | None = None
+    ) -> OperationResult[ProjectViewModel]:
+        """プロジェクト更新のハンドラ.
+
+        Args:
+            project_id (str): プロジェクトID
+            name (str|None, optional): プロジェクト名. Defaults to None.
+            description (str|None, optional): プロジェクト説明. Defaults to None.
+
+        Returns:
+            OperationResult[ProjectViewModel]: 操作結果
+
+        """
+        try:
+            request = UpdateProjectRequest(
+                project_id=project_id, name=name, description=description
+            )
+            result = self.update_use_case.execute(request)
+
+            if result.is_success:
+                view_model = self.presenter.present_project(result.value)
+                return OperationResult.succeed(view_model)
+
+            error_vm = self.presenter.present_error(
+                result.error.message, str(result.error.code.name)
+            )
+            return OperationResult.fail(error_vm.message, error_vm.code)
+
+        except ValueError as e:
+            error_vm = self.presenter.present_error(str(e), "VALIDATION_ERROR")
+            return OperationResult.fail(error_vm.message, error_vm.code)
