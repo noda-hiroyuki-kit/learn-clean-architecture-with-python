@@ -13,6 +13,7 @@ from todo_app.application.dtos.project_dto import (
     CompleteProjectResponse,
     CreateProjectRequest,
     ProjectResponse,
+    UpdateProjectRequest,
 )
 from todo_app.application.repositories.project_repository import ProjectRepository
 from todo_app.application.repositories.task_repository import TaskRepository
@@ -22,6 +23,7 @@ from todo_app.application.use_cases.project_use_cases import (
     CreateProjectUseCase,
     GetProjectUseCase,
     ListProjectsUseCase,
+    UpdateProjectUseCase,
 )
 from todo_app.domain.entities.project import (
     DESCRIPTION_MAX_LENGTH,
@@ -165,6 +167,33 @@ class BusinessRuleViolationListProjectsRepository(InMemoryProjectRepository):
         """一覧取得を拒否する."""
         msg = "プロジェクト一覧を取得できません"
         raise BusinessRuleViolationError(msg)
+
+
+class ValidationErrorUpdateProjectRepository(InMemoryProjectRepository):
+    """不正なProjectの保存時に検証エラーを送出するリポジトリ."""
+
+    def save(self, project: Project) -> None:
+        """名前が空のProjectの保存を拒否する."""
+        if not project.name.strip():
+            msg = "プロジェクト名が必要です"
+            raise ValidationError(msg)
+        super().save(project)
+
+
+class BusinessRuleViolationUpdateProjectRepository(InMemoryProjectRepository):
+    """更新時にビジネスルール違反を送出するリポジトリ."""
+
+    def __init__(self) -> None:
+        """更新拒否を無効にしてリポジトリを初期化する."""
+        super().__init__()
+        self.reject_updates = False
+
+    def save(self, project: Project) -> None:
+        """更新拒否が有効な場合はビジネスルール違反を送出する."""
+        if self.reject_updates:
+            msg = "プロジェクトを更新できません"
+            raise BusinessRuleViolationError(msg)
+        super().save(project)
 
 
 class TestCreateProjectUseCase:
@@ -582,6 +611,234 @@ class TestListProjectsUseCase:
         def test_errorのmessageが保持される(self, fixture_error: Error) -> None:
             """ビジネスルール違反のメッセージが保持されることを確認する."""
             assert fixture_error.message == "プロジェクト一覧を取得できません"
+
+
+class TestUpdateProjectUseCase:
+    """UpdateProjectUseCaseのテスト."""
+
+    class Testプロジェクトを更新できる:
+        """指定されたプロジェクトの項目を更新する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_repository(cls) -> InMemoryProjectRepository:
+            """テスト用の空のリポジトリを返す."""
+            return InMemoryProjectRepository()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_project(
+            cls, fixture_repository: InMemoryProjectRepository
+        ) -> Project:
+            """更新対象のプロジェクトをリポジトリに保存する."""
+            project = Project(name="更新前の名前", description="更新前の説明")
+            fixture_repository.save(project)
+            return project
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls,
+            fixture_repository: InMemoryProjectRepository,
+            fixture_project: Project,
+        ) -> Result:
+            """プロジェクト更新を実行した結果を返す."""
+            request = UpdateProjectRequest(
+                project_id=str(fixture_project.id),
+                name="更新後の名前",
+                description="更新後の説明",
+            )
+            return UpdateProjectUseCase(project_repository=fixture_repository).execute(
+                request
+            )
+
+        @pytest.fixture
+        @classmethod
+        def fixture_response(cls, fixture_result: Result) -> ProjectResponse:
+            """成功値からProjectResponseを取り出す."""
+            response = fixture_result.value
+            assert isinstance(response, ProjectResponse)
+            return response
+
+        def test_実行が成功する(self, fixture_result: Result) -> None:
+            """プロジェクトの更新が成功することを確認する."""
+            assert fixture_result.is_success is True
+
+        def test_更新内容を含むレスポンスが返る(
+            self, fixture_response: ProjectResponse, fixture_project: Project
+        ) -> None:
+            """更新したプロジェクトのレスポンスが返ることを確認する."""
+            assert fixture_response == ProjectResponse.from_entity(fixture_project)
+
+        def test_更新したプロジェクトが保存される(
+            self,
+            fixture_repository: InMemoryProjectRepository,
+            fixture_project: Project,
+        ) -> None:
+            """更新後のプロジェクトがリポジトリに保存されることを確認する."""
+            assert fixture_repository.saved_projects[-1] is fixture_project
+
+    class Test指定されない項目は保持される:
+        """リクエストで省略された項目を変更しない."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_repository(cls) -> InMemoryProjectRepository:
+            """テスト用の空のリポジトリを返す."""
+            return InMemoryProjectRepository()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_project(
+            cls, fixture_repository: InMemoryProjectRepository
+        ) -> Project:
+            """更新対象のプロジェクトをリポジトリに保存する."""
+            project = Project(name="変更しない名前", description="変更前の説明")
+            fixture_repository.save(project)
+            return project
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls,
+            fixture_repository: InMemoryProjectRepository,
+            fixture_project: Project,
+        ) -> Result:
+            """説明だけを更新した結果を返す."""
+            request = UpdateProjectRequest(
+                project_id=str(fixture_project.id),
+                description="変更後の説明",
+            )
+            return UpdateProjectUseCase(project_repository=fixture_repository).execute(
+                request
+            )
+
+        @pytest.fixture
+        @classmethod
+        def fixture_response(cls, fixture_result: Result) -> ProjectResponse:
+            """成功値からProjectResponseを取り出す."""
+            response = fixture_result.value
+            assert isinstance(response, ProjectResponse)
+            return response
+
+        def test_指定されない名前が保持される(
+            self, fixture_response: ProjectResponse
+        ) -> None:
+            """名前を省略した場合は元の名前が保持されることを確認する."""
+            assert fixture_response.name == "変更しない名前"
+
+        def test_指定された説明が更新される(
+            self, fixture_response: ProjectResponse
+        ) -> None:
+            """説明を指定した場合は新しい説明になることを確認する."""
+            assert fixture_response.description == "変更後の説明"
+
+    class Test存在しないプロジェクトの場合は失敗する:
+        """存在しないプロジェクトを指定した場合は失敗結果が返る."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_project_id(cls) -> UUID:
+            """存在しないプロジェクトのIDを生成する."""
+            return uuid4()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(cls, fixture_project_id: UUID) -> Result:
+            """存在しないIDで更新を実行した結果を返す."""
+            request = UpdateProjectRequest(
+                project_id=str(fixture_project_id), name="更新後"
+            )
+            return UpdateProjectUseCase(
+                project_repository=InMemoryProjectRepository()
+            ).execute(request)
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """失敗結果からエラーを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_実行が失敗する(self, fixture_result: Result) -> None:
+            """存在しないプロジェクトの更新が失敗することを確認する."""
+            assert fixture_result.is_success is False
+
+        def test_errorのcodeがnot_foundになる(self, fixture_error: Error) -> None:
+            """エラーコードがNOT_FOUNDになることを確認する."""
+            assert fixture_error.code is ErrorCode.NOT_FOUND
+
+        def test_errorのmessageにproject_idが含まれる(
+            self, fixture_error: Error, fixture_project_id: UUID
+        ) -> None:
+            """エラーメッセージにプロジェクトIDが含まれることを確認する."""
+            assert str(fixture_project_id) in fixture_error.message
+
+    class Test検証エラーの場合は失敗する:
+        """更新時の検証エラーを失敗結果に変換する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(cls) -> Result:
+            """空の名前で更新した結果を返す."""
+            repository = ValidationErrorUpdateProjectRepository()
+            project = Project(name="更新前の名前")
+            repository.save(project)
+            request = UpdateProjectRequest(project_id=str(project.id), name="")
+            return UpdateProjectUseCase(project_repository=repository).execute(request)
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """失敗結果からエラーを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_errorのcodeがvalidation_errorになる(
+            self, fixture_error: Error
+        ) -> None:
+            """エラーコードがVALIDATION_ERRORになることを確認する."""
+            assert fixture_error.code is ErrorCode.VALIDATION_ERROR
+
+        def test_errorのmessageが保持される(self, fixture_error: Error) -> None:
+            """検証エラーのメッセージが保持されることを確認する."""
+            assert fixture_error.message == "プロジェクト名が必要です"
+
+    class Testビジネスルール違反の場合は失敗する:
+        """更新時のビジネスルール違反を失敗結果に変換する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(cls) -> Result:
+            """更新時にビジネスルール違反となる結果を返す."""
+            repository = BusinessRuleViolationUpdateProjectRepository()
+            project = Project(name="更新前の名前")
+            repository.save(project)
+            repository.reject_updates = True
+            request = UpdateProjectRequest(
+                project_id=str(project.id), name="更新後の名前"
+            )
+            return UpdateProjectUseCase(project_repository=repository).execute(request)
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """失敗結果からエラーを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_errorのcodeがbusiness_rule_violationになる(
+            self, fixture_error: Error
+        ) -> None:
+            """エラーコードがBUSINESS_RULE_VIOLATIONになることを確認する."""
+            assert fixture_error.code is ErrorCode.BUSINESS_RULE_VIOLATION
+
+        def test_errorのmessageが保持される(self, fixture_error: Error) -> None:
+            """ビジネスルール違反のメッセージが保持されることを確認する."""
+            assert fixture_error.message == "プロジェクトを更新できません"
 
 
 class TestCompleteProjectUseCase:

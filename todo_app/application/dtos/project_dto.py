@@ -102,3 +102,27 @@ class CompleteProjectResponse:
             task_count=len(project.tasks),
             completion_notes=project.completion_notes,
         )
+
+
+@dataclass
+class UpdateProjectRequest:
+    """プロジェクト更新リクエスト用のデータ構造."""
+
+    project_id: str
+    name: str | None = None
+    description: str | None = None
+
+    def to_execution_params(self) -> dict:
+        """検証済みのリクエストデータをユースケース用のパラメータに変換.
+
+        Returns
+        -------
+        dict
+            ユースケース用の実行パラメータ.
+
+        """
+        return {
+            "project_id": UUID(self.project_id),
+            "name": self.name,
+            "description": self.description,
+        }

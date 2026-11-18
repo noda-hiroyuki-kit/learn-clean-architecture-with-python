@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from todo_app.application.dtos.project_dto import (
         CompleteProjectRequest,
         CreateProjectRequest,
+        UpdateProjectRequest,
     )
     from todo_app.application.repositories.project_repository import ProjectRepository
     from todo_app.application.repositories.task_repository import TaskRepository
@@ -173,5 +174,45 @@ class ListProjectsUseCase:
         try:
             projects = self.project_repository.get_all()
             return Result.success([ProjectResponse.from_entity(p) for p in projects])
+        except BusinessRuleViolationError as e:
+            return Result.failure(Error.business_rule_violation(str(e)))
+
+
+@dataclass
+class UpdateProjectUseCase:
+    """プロジェクトを更新するユースケース."""
+
+    project_repository: ProjectRepository
+
+    def execute(self, request: UpdateProjectRequest) -> Result:
+        """プロジェクトを更新する.
+
+        Parameters
+        ----------
+        request : UpdateProjectRequest
+            プロジェクト更新リクエスト.
+
+        Returns
+        -------
+        Result
+            ユースケースの実行結果.
+
+        """
+        try:
+            params = request.to_execution_params()
+            project = self.project_repository.get(params["project_id"])
+
+            if params["name"] is not None:
+                project.name = params["name"]
+            if params["description"] is not None:
+                project.description = params["description"]
+
+            self.project_repository.save(project)
+            return Result.success(ProjectResponse.from_entity(project))
+
+        except ProjectNotFoundError:
+            return Result.failure(Error.not_found("Project", str(params["project_id"])))
+        except ValidationError as e:
+            return Result.failure(Error.validation_error(str(e)))
         except BusinessRuleViolationError as e:
             return Result.failure(Error.business_rule_violation(str(e)))
