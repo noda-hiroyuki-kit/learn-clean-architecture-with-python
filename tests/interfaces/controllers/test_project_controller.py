@@ -234,3 +234,106 @@ class TestProjectController:
                 error_view_model,
                 call("プロジェクト ID の形式が無効です", "VALIDATION_ERROR"),
             )
+
+    class TestHandleGet:
+        """handle_getのテスト."""
+
+        @pytest.fixture
+        def fixture_controller(self) -> tuple[ProjectController, Mock, Mock]:
+            """テスト用のProjectControllerを生成する."""
+            get_use_case = Mock(spec=GetProjectUseCase)
+            presenter = Mock(spec=ProjectPresenter)
+            controller = ProjectController(
+                create_use_case=Mock(spec=CreateProjectUseCase),
+                complete_use_case=Mock(spec=CompleteProjectUseCase),
+                presenter=presenter,
+                get_use_case=get_use_case,
+                list_use_case=Mock(spec=ListProjectsUseCase),
+                update_use_case=Mock(spec=UpdateProjectUseCase),
+            )
+            return controller, get_use_case, presenter
+
+        def test_取得成功時に表示モデルを返す(
+            self, fixture_controller: tuple[ProjectController, Mock, Mock]
+        ) -> None:
+            """取得結果を表示モデルに変換して返すことを確認する."""
+            controller, get_use_case, presenter = fixture_controller
+            project_id = "12345678-1234-5678-1234-567812345678"
+            response = ProjectResponse(
+                id=project_id,
+                name="プロジェクト",
+                description="説明",
+                status="ACTIVE",
+                completion_date=None,
+                tasks=[],
+            )
+            view_model = ProjectViewModel(
+                id=project_id,
+                name="プロジェクト",
+                description="説明",
+                project_type="通常",
+                status_display="進行中",
+                task_count=0,
+                completed_task_count=0,
+                completion_info=None,
+                tasks=[],
+            )
+            get_use_case.execute.return_value = Result.success(response)
+            presenter.present_project.return_value = view_model
+
+            result = controller.handle_get(project_id)
+
+            assert (
+                result.success,
+                get_use_case.execute.call_args,
+                presenter.present_project.call_args,
+            ) == (
+                view_model,
+                call(project_id),
+                call(response),
+            )
+
+        def test_ユースケースの失敗を表示モデルに変換する(
+            self, fixture_controller: tuple[ProjectController, Mock, Mock]
+        ) -> None:
+            """ユースケースのエラーを表示モデルに変換して返すことを確認する."""
+            controller, get_use_case, presenter = fixture_controller
+            project_id = "12345678-1234-5678-1234-567812345678"
+            error = Error.not_found("Project", project_id)
+            error_view_model = ErrorViewModel(
+                message=f"id {project_id} の Project が見つかりません",
+                code="NOT_FOUND",
+            )
+            get_use_case.execute.return_value = Result.failure(error)
+            presenter.present_error.return_value = error_view_model
+
+            result = controller.handle_get(project_id)
+
+            assert (
+                result.error,
+                presenter.present_error.call_args,
+            ) == (
+                error_view_model,
+                call(f"id {project_id} の Project が見つかりません", "NOT_FOUND"),
+            )
+
+        def test_value_errorを検証エラーに変換する(
+            self, fixture_controller: tuple[ProjectController, Mock, Mock]
+        ) -> None:
+            """ValueErrorを検証エラーとして返すことを確認する."""
+            controller, get_use_case, presenter = fixture_controller
+            get_use_case.execute.side_effect = ValueError("プロジェクト ID が不正です")
+            error_view_model = ErrorViewModel(
+                message="プロジェクト ID が不正です", code="VALIDATION_ERROR"
+            )
+            presenter.present_error.return_value = error_view_model
+
+            result = controller.handle_get("invalid-project-id")
+
+            assert (
+                result.error,
+                presenter.present_error.call_args,
+            ) == (
+                error_view_model,
+                call("プロジェクト ID が不正です", "VALIDATION_ERROR"),
+            )

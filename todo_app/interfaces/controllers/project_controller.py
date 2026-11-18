@@ -23,6 +23,7 @@ if TYPE_CHECKING:
         UpdateProjectUseCase,
     )
     from todo_app.interfaces.presenters.base import ProjectPresenter
+    from todo_app.interfaces.view_models.project_vm import ProjectViewModel
 
 
 @dataclass
@@ -85,6 +86,32 @@ class ProjectController:
 
             if result.is_success:
                 view_model = self.presenter.present_complete(result.value)
+                return OperationResult.succeed(view_model)
+
+            error_vm = self.presenter.present_error(
+                result.error.message, str(result.error.code.name)
+            )
+            return OperationResult.fail(error_vm.message, error_vm.code)
+
+        except ValueError as e:
+            error_vm = self.presenter.present_error(str(e), "VALIDATION_ERROR")
+            return OperationResult.fail(error_vm.message, error_vm.code)
+
+    def handle_get(self, project_id: str) -> OperationResult[ProjectViewModel]:
+        """プロジェクト取得のハンドラ.
+
+        Args:
+            project_id (str): プロジェクトID
+
+        Returns:
+            OperationResult[ProjectViewModel]: 操作結果
+
+        """
+        try:
+            result = self.get_use_case.execute(project_id)
+
+            if result.is_success:
+                view_model = self.presenter.present_project(result.value)
                 return OperationResult.succeed(view_model)
 
             error_vm = self.presenter.present_error(
