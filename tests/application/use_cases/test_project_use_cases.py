@@ -20,6 +20,7 @@ from todo_app.application.service_ports.notifications import NotificationPort
 from todo_app.application.use_cases.project_use_cases import (
     CompleteProjectUseCase,
     CreateProjectUseCase,
+    GetProjectUseCase,
 )
 from todo_app.domain.entities.project import (
     DESCRIPTION_MAX_LENGTH,
@@ -370,6 +371,102 @@ class TestCreateProjectUseCase:
                 match="エラー結果から値にアクセスすることはできません。",
             ):
                 _ = fixture_result.value
+
+
+class TestGetProjectUseCase:
+    """GetProjectUseCaseのテスト."""
+
+    @pytest.fixture
+    @classmethod
+    def fixture_repository(cls) -> InMemoryProjectRepository:
+        """テスト用の空のリポジトリを返す."""
+        return InMemoryProjectRepository()
+
+    class Test既存のプロジェクトを取得できる:
+        """既存のプロジェクトをレスポンスとして取得する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_project(
+            cls, fixture_repository: InMemoryProjectRepository
+        ) -> Project:
+            """取得対象のプロジェクトをリポジトリに保存する."""
+            project = Project(name="テストプロジェクト", description="説明")
+            fixture_repository.save(project)
+            return project
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls,
+            fixture_repository: InMemoryProjectRepository,
+            fixture_project: Project,
+        ) -> Result:
+            """プロジェクト取得を実行した結果を返す."""
+            return GetProjectUseCase(project_repository=fixture_repository).execute(
+                str(fixture_project.id)
+            )
+
+        @pytest.fixture
+        @classmethod
+        def fixture_response(cls, fixture_result: Result) -> ProjectResponse:
+            """成功値からProjectResponseを取り出す."""
+            response = fixture_result.value
+            assert isinstance(response, ProjectResponse)
+            return response
+
+        def test_実行が成功する(self, fixture_result: Result) -> None:
+            """プロジェクトの取得が成功することを確認する."""
+            assert fixture_result.is_success is True
+
+        def test_取得したプロジェクトのレスポンスが返る(
+            self, fixture_response: ProjectResponse, fixture_project: Project
+        ) -> None:
+            """取得したプロジェクトに対応するレスポンスが返ることを確認する."""
+            assert fixture_response == ProjectResponse.from_entity(fixture_project)
+
+    class Test存在しないプロジェクトの場合は失敗する:
+        """存在しないプロジェクトを指定した場合は失敗結果が返る."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_project_id(cls) -> UUID:
+            """存在しないプロジェクトのIDを生成する."""
+            return uuid4()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls,
+            fixture_repository: InMemoryProjectRepository,
+            fixture_project_id: UUID,
+        ) -> Result:
+            """空のリポジトリで取得を実行した結果を返す."""
+            return GetProjectUseCase(project_repository=fixture_repository).execute(
+                str(fixture_project_id)
+            )
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """失敗結果からエラーを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_実行が失敗する(self, fixture_result: Result) -> None:
+            """存在しないプロジェクトの取得が失敗することを確認する."""
+            assert fixture_result.is_success is False
+
+        def test_errorのcodeがnot_foundになる(self, fixture_error: Error) -> None:
+            """エラーコードがNOT_FOUNDになることを確認する."""
+            assert fixture_error.code is ErrorCode.NOT_FOUND
+
+        def test_errorのmessageにproject_idが含まれる(
+            self, fixture_error: Error, fixture_project_id: UUID
+        ) -> None:
+            """エラーメッセージにプロジェクトIDが含まれることを確認する."""
+            assert str(fixture_project_id) in fixture_error.message
 
 
 class TestCompleteProjectUseCase:

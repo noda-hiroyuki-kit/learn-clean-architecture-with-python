@@ -8,6 +8,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from todo_app.application.common.result import Error, Result
 from todo_app.application.dtos.project_dto import (
@@ -125,3 +126,30 @@ class CompleteProjectUseCase:
             return Result.failure(Error.validation_error(str(e)))
         except BusinessRuleViolationError as e:
             return Result.failure(Error.business_rule_violation(str(e)))
+
+
+@dataclass
+class GetProjectUseCase:
+    """プロジェクトを取得するユースケース."""
+
+    project_repository: ProjectRepository
+
+    def execute(self, project_id: str) -> Result[ProjectResponse]:
+        """プロジェクトを取得する.
+
+        Parameters
+        ----------
+        project_id : str
+            プロジェクトID.
+
+        Returns
+        -------
+        Result[ProjectResponse]
+            ユースケースの実行結果.
+
+        """
+        try:
+            project = self.project_repository.get(UUID(project_id))
+            return Result.success(ProjectResponse.from_entity(project))
+        except ProjectNotFoundError:
+            return Result.failure(Error.not_found("Project", project_id))
