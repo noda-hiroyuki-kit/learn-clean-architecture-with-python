@@ -8,7 +8,10 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from todo_app.application.dtos.project_dto import CreateProjectRequest
+from todo_app.application.dtos.project_dto import (
+    CompleteProjectRequest,
+    CreateProjectRequest,
+)
 from todo_app.interfaces.view_models.base import OperationResult
 
 if TYPE_CHECKING:
@@ -50,6 +53,38 @@ class ProjectController:
 
             if result.is_success:
                 view_model = self.presenter.present_project(result.value)
+                return OperationResult.succeed(view_model)
+
+            error_vm = self.presenter.present_error(
+                result.error.message, str(result.error.code.name)
+            )
+            return OperationResult.fail(error_vm.message, error_vm.code)
+
+        except ValueError as e:
+            error_vm = self.presenter.present_error(str(e), "VALIDATION_ERROR")
+            return OperationResult.fail(error_vm.message, error_vm.code)
+
+    def handle_complete(
+        self, project_id: str, notes: str | None = None
+    ) -> OperationResult:
+        """プロジェクト完了のハンドラ.
+
+        Args:
+            project_id (str): プロジェクトID
+            notes (str | None, optional): 完了時のメモ. Defaults to None.
+
+        Returns:
+            OperationResult: 操作結果
+
+        """
+        try:
+            request = CompleteProjectRequest(
+                project_id=project_id, completion_notes=notes
+            )
+            result = self.complete_use_case.execute(request)
+
+            if result.is_success:
+                view_model = self.presenter.present_complete(result.value)
                 return OperationResult.succeed(view_model)
 
             error_vm = self.presenter.present_error(
