@@ -26,6 +26,7 @@ from todo_app.domain.value_object import Priority
 
 if TYPE_CHECKING:
     import datetime as dt
+    from uuid import UUID
 
     from todo_app.application.dtos.task_dto import SetTaskPriorityRequest
     from todo_app.application.repositories.project_repository import ProjectRepository
@@ -158,3 +159,30 @@ class SetTaskPriorityUseCase:
             return Result.failure(Error.not_found("Task", str(params["task_id"])))
         except ValidationError as e:
             return Result.failure(Error.validation_error(str(e)))
+
+
+@dataclass
+class GetTaskUseCase:
+    """Taskを取得するユースケース."""
+
+    task_repository: TaskRepository
+
+    def execute(self, task_id: UUID) -> Result[TaskResponse]:
+        """Taskを取得するユースケースを実行する.
+
+        Parameters
+        ----------
+        task_id : UUID
+            取得するTaskのID.
+
+        Returns
+        -------
+        Result[TaskResponse]
+            取得結果を含むResultオブジェクト.
+
+        """
+        try:
+            task = self.task_repository.get(task_id)
+            return Result.success(TaskResponse.from_entity(task))
+        except TaskNotFoundError:
+            return Result.failure(Error.not_found("Task", str(task_id)))

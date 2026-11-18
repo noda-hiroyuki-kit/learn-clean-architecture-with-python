@@ -21,6 +21,7 @@ from todo_app.application.service_ports.notifications import NotificationPort
 from todo_app.application.use_cases.task_use_cases import (
     CompleteTaskUseCase,
     CreateTaskUseCase,
+    GetTaskUseCase,
     SetTaskPriorityUseCase,
     _get_completed_at,
 )
@@ -966,3 +967,85 @@ class TestSetTaskPriorityUseCase:
         ) -> None:
             """例外のメッセージがErrorに保持されることを確認する."""
             assert fixture_error.message == str(fixture_task_id)
+
+
+class TestGetTaskUseCase:
+    """GetTaskUseCaseのテスト."""
+
+    class Test存在するtaskを取得できる:
+        """存在するTaskをTaskResponseとして取得する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_repository(cls) -> InMemoryTaskRepository:
+            """テスト用のTaskリポジトリを返す."""
+            return InMemoryTaskRepository()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_task(cls, fixture_repository: InMemoryTaskRepository) -> Task:
+            """取得対象のTaskをリポジトリに保存する."""
+            task = Task(title="テストタスク", description="説明")
+            fixture_repository.save(task)
+            return task
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls,
+            fixture_repository: InMemoryTaskRepository,
+            fixture_task: Task,
+        ) -> Result:
+            """Task取得を実行した結果を返す."""
+            return GetTaskUseCase(task_repository=fixture_repository).execute(
+                fixture_task.id
+            )
+
+        def test_実行が成功する(self, fixture_result: Result) -> None:
+            """Taskの取得が成功することを確認する."""
+            assert fixture_result.is_success is True
+
+        def test_取得したtaskのレスポンスが返る(
+            self, fixture_result: Result, fixture_task: Task
+        ) -> None:
+            """取得したTaskに対応するレスポンスが返ることを確認する."""
+            assert fixture_result.value == TaskResponse.from_entity(fixture_task)
+
+    class Test存在しないtaskの場合は失敗する:
+        """存在しないTaskを指定した場合は失敗結果が返る."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_task_id(cls) -> UUID:
+            """存在しないTaskのIDを生成する."""
+            return uuid4()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(cls, fixture_task_id: UUID) -> Result:
+            """空のリポジトリでTask取得を実行した結果を返す."""
+            return GetTaskUseCase(task_repository=InMemoryTaskRepository()).execute(
+                fixture_task_id
+            )
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """失敗結果からエラーを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_実行が失敗する(self, fixture_result: Result) -> None:
+            """存在しないTaskの取得が失敗することを確認する."""
+            assert fixture_result.is_success is False
+
+        def test_errorのcodeがnot_foundになる(self, fixture_error: Error) -> None:
+            """エラーコードがNOT_FOUNDになることを確認する."""
+            assert fixture_error.code is ErrorCode.NOT_FOUND
+
+        def test_errorのmessageにtask_idが含まれる(
+            self, fixture_error: Error, fixture_task_id: UUID
+        ) -> None:
+            """エラーメッセージにTaskのIDが含まれることを確認する."""
+            assert str(fixture_task_id) in fixture_error.message
