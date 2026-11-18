@@ -337,3 +337,108 @@ class TestProjectController:
                 error_view_model,
                 call("プロジェクト ID が不正です", "VALIDATION_ERROR"),
             )
+
+    class TestHandleList:
+        """handle_listのテスト."""
+
+        @pytest.fixture
+        def fixture_controller(self) -> tuple[ProjectController, Mock, Mock]:
+            """テスト用のProjectControllerを生成する."""
+            list_use_case = Mock(spec=ListProjectsUseCase)
+            presenter = Mock(spec=ProjectPresenter)
+            controller = ProjectController(
+                create_use_case=Mock(spec=CreateProjectUseCase),
+                complete_use_case=Mock(spec=CompleteProjectUseCase),
+                presenter=presenter,
+                get_use_case=Mock(spec=GetProjectUseCase),
+                list_use_case=list_use_case,
+                update_use_case=Mock(spec=UpdateProjectUseCase),
+            )
+            return controller, list_use_case, presenter
+
+        def test_取得成功時に表示モデルの一覧を返す(
+            self, fixture_controller: tuple[ProjectController, Mock, Mock]
+        ) -> None:
+            """一覧の各取得結果を表示モデルに変換して返すことを確認する."""
+            controller, list_use_case, presenter = fixture_controller
+            responses = [
+                ProjectResponse(
+                    id="project-1",
+                    name="プロジェクト1",
+                    description="説明1",
+                    status="ACTIVE",
+                    completion_date=None,
+                    tasks=[],
+                ),
+                ProjectResponse(
+                    id="project-2",
+                    name="プロジェクト2",
+                    description="説明2",
+                    status="ACTIVE",
+                    completion_date=None,
+                    tasks=[],
+                ),
+            ]
+            view_models = [
+                ProjectViewModel(
+                    id="project-1",
+                    name="プロジェクト1",
+                    description="説明1",
+                    project_type="通常",
+                    status_display="進行中",
+                    task_count=0,
+                    completed_task_count=0,
+                    completion_info=None,
+                    tasks=[],
+                ),
+                ProjectViewModel(
+                    id="project-2",
+                    name="プロジェクト2",
+                    description="説明2",
+                    project_type="通常",
+                    status_display="進行中",
+                    task_count=0,
+                    completed_task_count=0,
+                    completion_info=None,
+                    tasks=[],
+                ),
+            ]
+            list_use_case.execute.return_value = Result.success(responses)
+            presenter.present_project.side_effect = view_models
+
+            result = controller.handle_list()
+
+            assert (
+                result.success,
+                list_use_case.execute.call_args,
+                presenter.present_project.call_args_list,
+            ) == (
+                view_models,
+                call(),
+                [call(response) for response in responses],
+            )
+
+        def test_ユースケースの失敗を表示モデルに変換する(
+            self, fixture_controller: tuple[ProjectController, Mock, Mock]
+        ) -> None:
+            """ユースケースのエラーを表示モデルに変換して返すことを確認する."""
+            controller, list_use_case, presenter = fixture_controller
+            error = Error.business_rule_violation("プロジェクト一覧を取得できません")
+            error_view_model = ErrorViewModel(
+                message="プロジェクト一覧を取得できません",
+                code="BUSINESS_RULE_VIOLATION",
+            )
+            list_use_case.execute.return_value = Result.failure(error)
+            presenter.present_error.return_value = error_view_model
+
+            result = controller.handle_list()
+
+            assert (
+                result.error,
+                list_use_case.execute.call_args,
+                presenter.present_error.call_args,
+            ) == (
+                error_view_model,
+                call(),
+                call("プロジェクト一覧を取得できません", "BUSINESS_RULE_VIOLATION"),
+            )

@@ -122,3 +122,23 @@ class ProjectController:
         except ValueError as e:
             error_vm = self.presenter.present_error(str(e), "VALIDATION_ERROR")
             return OperationResult.fail(error_vm.message, error_vm.code)
+
+    def handle_list(self) -> OperationResult[list[ProjectViewModel]]:
+        """プロジェクト一覧取得のハンドラ.
+
+        Returns:
+            OperationResult[list[ProjectViewModel]]: 操作結果
+
+        """
+        result = self.list_use_case.execute()
+
+        if result.is_success:
+            view_models = [
+                self.presenter.present_project(proj) for proj in result.value
+            ]
+            return OperationResult.succeed(view_models)
+
+        error_vm = self.presenter.present_error(
+            result.error.message, str(result.error.code.name)
+        )
+        return OperationResult.fail(error_vm.message, error_vm.code)
