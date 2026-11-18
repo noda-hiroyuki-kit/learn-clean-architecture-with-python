@@ -5,8 +5,8 @@
 # Copyright (c) 2026 Noda Hiroyuki.
 """アプリケーション層のための Task データ転送オブジェクト."""
 
+import datetime as dt
 from dataclasses import dataclass
-from datetime import datetime
 from typing import TYPE_CHECKING, Self
 from uuid import UUID
 
@@ -76,7 +76,7 @@ class CreateTaskRequest:
         }
 
         if self.due_date:
-            params["due_date"] = Deadline(datetime.fromisoformat(self.due_date))
+            params["due_date"] = Deadline(dt.datetime.fromisoformat(self.due_date))
         if self.priority:
             params["priority"] = Priority[_normalize_priority(self.priority)]
         if self.project_id:
@@ -102,9 +102,9 @@ class TaskResponse:
     description: str
     status: TaskStatus
     priority: Priority
-    due_date: datetime | None = None
+    due_date: dt.datetime | None = None
     project_id: str | None = None
-    completion_date: datetime | None = None
+    completion_date: dt.datetime | None = None
     completion_notes: str | None = None
 
     @classmethod
@@ -153,3 +153,44 @@ class SetTaskPriorityRequest:
             "task_id": UUID(self.task_id),
             "priority": Priority[_normalize_priority(self.priority)],
         }
+
+
+@dataclass(frozen=True)
+class UpdateTaskRequest:
+    """タスクを更新するためのリクエストデータ."""
+
+    task_id: str
+    title: str | None = None
+    description: str | None = None
+    status: TaskStatus | None = None
+    priority: Priority | None = None
+    due_date: str | None = None
+
+    def to_execution_params(self) -> dict:
+        """リクエストデータをユースケースのパラメータに変換する.
+
+        Returns:
+            dict: ユースケースの実行に必要なパラメータを含む辞書.
+
+        """
+        params = {"task_id": UUID(self.task_id)}
+
+        if self.title is not None:
+            params["title"] = self.title.strip()
+        if self.description is not None:
+            params["description"] = self.description.strip()
+        if self.status is not None:
+            params["status"] = self.status
+        if self.priority is not None:
+            params["priority"] = self.priority
+        # Always include deadline in params if due_date was provided
+        if self.due_date is not None:
+            if self.due_date:  # Non-empty string
+                due_date = dt.datetime.fromisoformat(self.due_date)
+                if not due_date.tzinfo:
+                    due_date = due_date.replace(tzinfo=dt.UTC)
+                params["deadline"] = Deadline(due_date)
+            else:  # Empty string - clear the deadline
+                params["deadline"] = None
+
+        return params

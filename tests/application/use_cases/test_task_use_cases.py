@@ -14,6 +14,7 @@ from todo_app.application.dtos.task_dto import (
     CreateTaskRequest,
     SetTaskPriorityRequest,
     TaskResponse,
+    UpdateTaskRequest,
 )
 from todo_app.application.repositories.project_repository import ProjectRepository
 from todo_app.application.repositories.task_repository import TaskRepository
@@ -23,6 +24,7 @@ from todo_app.application.use_cases.task_use_cases import (
     CreateTaskUseCase,
     GetTaskUseCase,
     SetTaskPriorityUseCase,
+    UpdateTaskUseCase,
     _get_completed_at,
 )
 from todo_app.domain.entities.project import Project
@@ -128,6 +130,26 @@ class ValidationErrorTaskRepository(InMemoryTaskRepository):
     def get(self, task_id: UUID) -> Task:
         """Taskの取得時に検証エラーを送出する."""
         raise ValidationError(str(task_id))
+
+
+class BusinessRuleViolationUpdateTaskRepository(InMemoryTaskRepository):
+    """Task保存時にビジネスルール違反を送出するリポジトリ."""
+
+    def __init__(self, task: Task) -> None:
+        """取得対象のTaskを保持する."""
+        super().__init__()
+        self._task = task
+
+    def get(self, task_id: UUID) -> Task:
+        """保持しているTaskを返す."""
+        if task_id != self._task.id:
+            raise TaskNotFoundError(task_id)
+        return self._task
+
+    def save(self, task: Task) -> None:  # noqa: ARG002
+        """保存時にビジネスルール違反を送出する."""
+        msg = "Taskを更新できません"
+        raise BusinessRuleViolationError(msg)
 
 
 class SpyNotificationPort(NotificationPort):
@@ -1049,3 +1071,281 @@ class TestGetTaskUseCase:
         ) -> None:
             """エラーメッセージにTaskのIDが含まれることを確認する."""
             assert str(fixture_task_id) in fixture_error.message
+
+
+class TestUpdateTaskUseCase:
+    """UpdateTaskUseCaseのテスト."""
+
+    class TestTaskを更新できる:
+        """指定されたTaskの項目を更新する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_repository(cls) -> InMemoryTaskRepository:
+            """テスト用のTaskリポジトリを返す."""
+            return InMemoryTaskRepository()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_notification_port(cls) -> SpyNotificationPort:
+            """通知の記録用ポートを返す."""
+            return SpyNotificationPort()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_task(cls, fixture_repository: InMemoryTaskRepository) -> Task:
+            """更新対象のTaskをリポジトリに保存する."""
+            task = Task(
+                title="更新前のタイトル",
+                description="更新前の説明",
+                due_date=Deadline(dt.datetime(2099, 1, 1, tzinfo=dt.UTC)),
+            )
+            fixture_repository.save(task)
+            fixture_repository.saved_tasks.clear()
+            return task
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(
+            cls,
+            fixture_repository: InMemoryTaskRepository,
+            fixture_notification_port: SpyNotificationPort,
+            fixture_task: Task,
+        ) -> Result:
+            """全項目の更新を実行した結果を返す."""
+            request = UpdateTaskRequest(
+                task_id=str(fixture_task.id),
+                title="更新後のタイトル",
+                description="更新後の説明",
+                status=TaskStatus.IN_PROGRESS,
+                priority=Priority.HIGH,
+                due_date="2099-12-31T12:00:00+00:00",
+            )
+            return UpdateTaskUseCase(
+                task_repository=fixture_repository,
+                notification_service=fixture_notification_port,
+            ).execute(request)
+
+        def test_実行が成功する(self, fixture_result: Result) -> None:
+            """Taskの更新が成功することを確認する."""
+            assert fixture_result.is_success is True
+
+        def test_更新内容を含むTaskResponseが返る(
+            self, fixture_result: Result, fixture_task: Task
+        ) -> None:
+            """更新後のTaskに対応するレスポンスが返ることを確認する."""
+            assert fixture_result.value == TaskResponse.from_entity(fixture_task)
+
+        def test_Taskが保存される(
+            self,
+            fixture_repository: InMemoryTaskRepository,
+            fixture_task: Task,
+            fixture_result: Result,
+        ) -> None:
+            """更新したTaskがリポジトリに保存されることを確認する."""
+            assert (
+                fixture_result.is_success,
+                fixture_repository.saved_tasks,
+            ) == (True, [fixture_task])
+
+        def test_優先度をhighにすると通知される(
+            self,
+            fixture_notification_port: SpyNotificationPort,
+            fixture_task: Task,
+            fixture_result: Result,
+        ) -> None:
+            """優先度がHIGHの場合に通知されることを確認する."""
+            assert (
+                fixture_result.is_success,
+                fixture_notification_port.high_priority_tasks,
+            ) == (True, [fixture_task])
+
+    class Test指定されない項目は保持される:
+        """リクエストで省略された項目を変更しない."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_task(cls) -> Task:
+            """元の値を確認できるTaskを返す."""
+            return Task(
+                title="変更しないタイトル",
+                description="変更しない説明",
+                priority=Priority.LOW,
+            )
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(cls, fixture_task: Task) -> Result:
+            """項目を指定せずに更新した結果を返す."""
+            repository = InMemoryTaskRepository()
+            repository.save(fixture_task)
+            return UpdateTaskUseCase(
+                task_repository=repository,
+                notification_service=SpyNotificationPort(),
+            ).execute(UpdateTaskRequest(task_id=str(fixture_task.id)))
+
+        def test_省略された値が保持される(self, fixture_result: Result) -> None:
+            """更新項目が省略された場合は既存値が保たれることを確認する."""
+            response = fixture_result.value
+            assert (
+                response.title,
+                response.description,
+                response.status,
+                response.priority,
+                response.due_date,
+            ) == (
+                "変更しないタイトル",
+                "変更しない説明",
+                TaskStatus.TODO,
+                Priority.LOW,
+                None,
+            )
+
+    class Test期限をクリアできる:
+        """空文字の期限で既存の期限を削除する."""
+
+        def test_due_dateがnoneになる(self) -> None:
+            """期限に空文字を指定すると期限が削除されることを確認する."""
+            repository = InMemoryTaskRepository()
+            task = Task(
+                title="期限付きTask",
+                description="説明",
+                due_date=Deadline(dt.datetime(2099, 1, 1, tzinfo=dt.UTC)),
+            )
+            repository.save(task)
+            result = UpdateTaskUseCase(
+                task_repository=repository,
+                notification_service=SpyNotificationPort(),
+            ).execute(UpdateTaskRequest(task_id=str(task.id), due_date=""))
+
+            assert result.value.due_date is None
+
+    class Test優先度がhigh以外の場合は通知されない:
+        """HIGH以外の優先度では通知しない."""
+
+        @pytest.mark.parametrize("priority", [Priority.LOW, Priority.MEDIUM])
+        def test_通知されない(self, priority: Priority) -> None:
+            """優先度がHIGH以外の場合は通知されないことを確認する."""
+            repository = InMemoryTaskRepository()
+            task = Task(title="Task", description="説明")
+            repository.save(task)
+            notification_port = SpyNotificationPort()
+            result = UpdateTaskUseCase(
+                task_repository=repository,
+                notification_service=notification_port,
+            ).execute(UpdateTaskRequest(task_id=str(task.id), priority=priority))
+
+            assert (
+                result.is_success,
+                notification_port.high_priority_tasks,
+            ) == (True, [])
+
+    class Test存在しないtaskの場合は失敗する:
+        """存在しないTaskを指定した場合は失敗結果が返る."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_task_id(cls) -> UUID:
+            """存在しないTaskのIDを生成する."""
+            return uuid4()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(cls, fixture_task_id: UUID) -> Result:
+            """空のリポジトリで更新を実行した結果を返す."""
+            return UpdateTaskUseCase(
+                task_repository=InMemoryTaskRepository(),
+                notification_service=SpyNotificationPort(),
+            ).execute(UpdateTaskRequest(task_id=str(fixture_task_id), title="更新後"))
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """失敗結果からエラーを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_実行が失敗する(self, fixture_result: Result) -> None:
+            """存在しないTaskの更新が失敗することを確認する."""
+            assert fixture_result.is_success is False
+
+        def test_errorのcodeがnot_foundになる(self, fixture_error: Error) -> None:
+            """エラーコードがNOT_FOUNDになることを確認する."""
+            assert fixture_error.code is ErrorCode.NOT_FOUND
+
+        def test_errorのmessageにtask_idが含まれる(
+            self, fixture_error: Error, fixture_task_id: UUID
+        ) -> None:
+            """エラーメッセージにTaskのIDが含まれることを確認する."""
+            assert str(fixture_task_id) in fixture_error.message
+
+    class Test検証エラーの場合は失敗する:
+        """リポジトリが検証エラーを送出した場合は失敗結果が返る."""
+
+        @pytest.fixture(scope="class")
+        @classmethod
+        def fixture_task_id(cls) -> UUID:
+            """テスト用のTask IDを生成する."""
+            return uuid4()
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(cls, fixture_task_id: UUID) -> Result:
+            """検証エラーを送出するリポジトリで更新した結果を返す."""
+            return UpdateTaskUseCase(
+                task_repository=ValidationErrorTaskRepository(),
+                notification_service=SpyNotificationPort(),
+            ).execute(UpdateTaskRequest(task_id=str(fixture_task_id), title="更新後"))
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """失敗結果からエラーを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_errorのcodeがvalidation_errorになる(
+            self, fixture_error: Error
+        ) -> None:
+            """エラーコードがVALIDATION_ERRORになることを確認する."""
+            assert fixture_error.code is ErrorCode.VALIDATION_ERROR
+
+        def test_errorのmessageが保持される(
+            self, fixture_error: Error, fixture_task_id: UUID
+        ) -> None:
+            """検証エラーのメッセージが保持されることを確認する."""
+            assert fixture_error.message == str(fixture_task_id)
+
+    class Testビジネスルール違反の場合は失敗する:
+        """保存時のビジネスルール違反を失敗結果に変換する."""
+
+        @pytest.fixture
+        @classmethod
+        def fixture_result(cls) -> Result:
+            """保存時にビジネスルール違反となる結果を返す."""
+            task = Task(title="更新前", description="説明")
+            repository = BusinessRuleViolationUpdateTaskRepository(task)
+            return UpdateTaskUseCase(
+                task_repository=repository,
+                notification_service=SpyNotificationPort(),
+            ).execute(UpdateTaskRequest(task_id=str(task.id), title="更新後"))
+
+        @pytest.fixture
+        @classmethod
+        def fixture_error(cls, fixture_result: Result) -> Error:
+            """失敗結果からエラーを取り出す."""
+            error = fixture_result.error
+            assert error is not None
+            return error
+
+        def test_errorのcodeがbusiness_rule_violationになる(
+            self, fixture_error: Error
+        ) -> None:
+            """エラーコードがBUSINESS_RULE_VIOLATIONになることを確認する."""
+            assert fixture_error.code is ErrorCode.BUSINESS_RULE_VIOLATION
+
+        def test_errorのmessageが保持される(self, fixture_error: Error) -> None:
+            """ビジネスルール違反のメッセージが保持されることを確認する."""
+            assert fixture_error.message == "Taskを更新できません"

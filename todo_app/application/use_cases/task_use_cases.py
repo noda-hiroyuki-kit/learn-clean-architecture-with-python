@@ -14,6 +14,7 @@ from todo_app.application.dtos.task_dto import (
     CompleteTaskRequest,
     CreateTaskRequest,
     TaskResponse,
+    UpdateTaskRequest,
 )
 from todo_app.domain.entities.task import Task
 from todo_app.domain.exceptions import (
@@ -186,3 +187,52 @@ class GetTaskUseCase:
             return Result.success(TaskResponse.from_entity(task))
         except TaskNotFoundError:
             return Result.failure(Error.not_found("Task", str(task_id)))
+
+
+@dataclass
+class UpdateTaskUseCase:
+    """Taskを更新するユースケース."""
+
+    task_repository: TaskRepository
+    notification_service: NotificationPort
+
+    def execute(self, request: UpdateTaskRequest) -> Result[TaskResponse]:
+        """Taskを更新するユースケースを実行する.
+
+        Parameters
+        ----------
+        request : UpdateTaskRequest
+            更新内容を含むリクエストデータ.
+
+        Returns
+        -------
+        Result[TaskResponse]
+            更新結果を含むResultオブジェクト.
+
+        """
+        try:
+            params = request.to_execution_params()
+            task = self.task_repository.get(params["task_id"])
+
+            if params.get("title") is not None:
+                task.title = params["title"]
+            if params.get("description") is not None:
+                task.description = params["description"]
+            if params.get("status") is not None:
+                task.status = params["status"]
+            if params.get("priority") is not None:
+                task.priority = params["priority"]
+                if task.priority == Priority.HIGH:
+                    self.notification_service.notify_task_high_priority(task)
+            if "deadline" in params:
+                task.due_date = params["deadline"]
+
+            self.task_repository.save(task)
+            return Result.success(TaskResponse.from_entity(task))
+
+        except TaskNotFoundError:
+            return Result.failure(Error.not_found("Task", str(params["task_id"])))
+        except ValidationError as e:
+            return Result.failure(Error.validation_error(str(e)))
+        except BusinessRuleViolationError as e:
+            return Result.failure(Error.business_rule_violation(str(e)))
