@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from todo_app.application.common.result import Error, Result
+from todo_app.application.dtos.operations import DeletionOutcome
 from todo_app.application.dtos.task_dto import (
     CompleteTaskRequest,
     CreateTaskRequest,
@@ -236,3 +237,31 @@ class UpdateTaskUseCase:
             return Result.failure(Error.validation_error(str(e)))
         except BusinessRuleViolationError as e:
             return Result.failure(Error.business_rule_violation(str(e)))
+
+
+@dataclass
+class DeleteTaskUseCase:
+    """Taskを削除するユースケース."""
+
+    task_repository: TaskRepository
+
+    def execute(self, task_id: UUID) -> Result[DeletionOutcome]:
+        """Taskを削除するユースケースを実行する.
+
+        Parameters
+        ----------
+        task_id : UUID
+            削除するTaskのID.
+
+        Returns
+        -------
+        Result[DeletionOutcome]
+            削除結果を含むResultオブジェクト.
+
+        """
+        try:
+            self.task_repository.get(task_id)
+            self.task_repository.delete(task_id)
+            return Result.success(DeletionOutcome(task_id))
+        except TaskNotFoundError:
+            return Result.failure(Error.not_found("Task", str(task_id)))

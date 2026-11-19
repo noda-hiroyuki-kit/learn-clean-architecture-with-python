@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 
 from todo_app.application.common.result import ErrorCode
+from todo_app.application.dtos.operations import DeletionOutcome
 from todo_app.application.dtos.task_dto import (
     CompleteTaskRequest,
     CreateTaskRequest,
@@ -22,6 +23,7 @@ from todo_app.application.service_ports.notifications import NotificationPort
 from todo_app.application.use_cases.task_use_cases import (
     CompleteTaskUseCase,
     CreateTaskUseCase,
+    DeleteTaskUseCase,
     GetTaskUseCase,
     SetTaskPriorityUseCase,
     UpdateTaskUseCase,
@@ -1349,3 +1351,34 @@ class TestUpdateTaskUseCase:
         def test_errorのmessageが保持される(self, fixture_error: Error) -> None:
             """ビジネスルール違反のメッセージが保持されることを確認する."""
             assert fixture_error.message == "Taskを更新できません"
+
+
+class TestDeleteTaskUseCase:
+    """DeleteTaskUseCaseのテスト."""
+
+    def test存在するtaskを削除して削除結果を返す(self) -> None:
+        """Taskを削除し、削除対象のIDを含む結果を返すことを確認する."""
+        repository = InMemoryTaskRepository()
+        task = Task(title="削除対象", description="説明")
+        repository.save(task)
+        result = DeleteTaskUseCase(repository).execute(task.id)
+
+        with pytest.raises(TaskNotFoundError):
+            repository.get(task.id)
+
+        assert result.value == DeletionOutcome(task.id)
+
+    def test存在しないtaskの削除はnot_foundになる(self) -> None:
+        """存在しないTaskを削除した場合はNOT_FOUNDを返すことを確認する."""
+        task_id = uuid4()
+        result = DeleteTaskUseCase(InMemoryTaskRepository()).execute(task_id)
+
+        assert (
+            result.is_success,
+            result.error.code,
+            result.error.message,
+        ) == (
+            False,
+            ErrorCode.NOT_FOUND,
+            f"id {task_id} の Task が見つかりません",
+        )
