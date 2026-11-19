@@ -15,6 +15,7 @@ from todo_app.application.use_cases.task_use_cases import (
     CompleteTaskUseCase,
     CreateTaskRequest,
     CreateTaskUseCase,
+    DeleteTaskUseCase,
     GetTaskUseCase,
     UpdateTaskUseCase,
 )
@@ -22,6 +23,7 @@ from todo_app.domain.value_object import Priority, TaskStatus
 from todo_app.interfaces.view_models.base import OperationResult
 
 if TYPE_CHECKING:
+    from todo_app.application.dtos.operations import DeletionOutcome
     from todo_app.interfaces.presenters.base import TaskPresenter
     from todo_app.interfaces.view_models.task_vm import TaskViewModel
 
@@ -34,6 +36,7 @@ class TaskController:
     get_use_case: GetTaskUseCase
     complete_use_case: CompleteTaskUseCase
     update_use_case: UpdateTaskUseCase
+    delete_use_case: DeleteTaskUseCase
     presenter: TaskPresenter
 
     def handle_create(
@@ -165,5 +168,28 @@ class TaskController:
             )
             return OperationResult.fail(error_vm.message, error_vm.code)
         except (ValueError, KeyError) as e:
+            error_vm = self.presenter.present_error(str(e), "VALIDATION_ERROR")
+            return OperationResult.fail(error_vm.message, error_vm.code)
+
+    def handle_delete(self, task_id: str) -> OperationResult[DeletionOutcome]:
+        """タスク削除のリクエストを処理する.
+
+        Args:
+            task_id (str): タスクのID
+
+        Returns:
+            OperationResult[DeletionOutcome]: タスク削除の結果
+
+        """
+        try:
+            result = self.delete_use_case.execute(UUID(task_id))
+            if result.is_success:
+                return OperationResult.succeed(result.value)
+
+            error_vm = self.presenter.present_error(
+                result.error.message, str(result.error.code.name)
+            )
+            return OperationResult.fail(error_vm.message, error_vm.code)
+        except ValueError as e:
             error_vm = self.presenter.present_error(str(e), "VALIDATION_ERROR")
             return OperationResult.fail(error_vm.message, error_vm.code)

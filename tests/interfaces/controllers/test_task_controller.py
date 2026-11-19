@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 
 from todo_app.application.common.result import Error, Result
+from todo_app.application.dtos.operations import DeletionOutcome
 from todo_app.application.dtos.task_dto import (
     CompleteTaskRequest,
     CreateTaskRequest,
@@ -17,6 +18,7 @@ from todo_app.application.dtos.task_dto import (
 from todo_app.application.use_cases.task_use_cases import (
     CompleteTaskUseCase,
     CreateTaskUseCase,
+    DeleteTaskUseCase,
     GetTaskUseCase,
     UpdateTaskUseCase,
 )
@@ -42,6 +44,7 @@ class TestTaskController:
                 create_use_case=Mock(spec=CreateTaskUseCase),
                 get_use_case=get_use_case,
                 complete_use_case=Mock(spec=CompleteTaskUseCase),
+                delete_use_case=Mock(spec=DeleteTaskUseCase),
                 update_use_case=Mock(spec=UpdateTaskUseCase),
                 presenter=presenter,
             )
@@ -145,6 +148,7 @@ class TestTaskController:
                 create_use_case=create_use_case,
                 get_use_case=Mock(spec=GetTaskUseCase),
                 complete_use_case=complete_use_case,
+                delete_use_case=Mock(spec=DeleteTaskUseCase),
                 update_use_case=Mock(spec=UpdateTaskUseCase),
                 presenter=presenter,
             )
@@ -243,6 +247,7 @@ class TestTaskController:
                 create_use_case=create_use_case,
                 get_use_case=Mock(spec=GetTaskUseCase),
                 complete_use_case=complete_use_case,
+                delete_use_case=Mock(spec=DeleteTaskUseCase),
                 update_use_case=Mock(spec=UpdateTaskUseCase),
                 presenter=presenter,
             )
@@ -347,6 +352,7 @@ class TestTaskController:
                 create_use_case=Mock(spec=CreateTaskUseCase),
                 get_use_case=Mock(spec=GetTaskUseCase),
                 complete_use_case=Mock(spec=CompleteTaskUseCase),
+                delete_use_case=Mock(spec=DeleteTaskUseCase),
                 update_use_case=update_use_case,
                 presenter=presenter,
             )
@@ -480,4 +486,88 @@ class TestTaskController:
             ) == (
                 error_view_model,
                 call("タスク ID が不正です", "VALIDATION_ERROR"),
+            )
+
+    class TestHandleDelete:
+        """handle_deleteのテスト."""
+
+        @pytest.fixture
+        def fixture_controller(self) -> tuple[TaskController, Mock, Mock]:
+            """テスト用のTaskControllerを生成する."""
+            delete_use_case = Mock(spec=DeleteTaskUseCase)
+            presenter = Mock(spec=TaskPresenter)
+            controller = TaskController(
+                create_use_case=Mock(spec=CreateTaskUseCase),
+                get_use_case=Mock(spec=GetTaskUseCase),
+                complete_use_case=Mock(spec=CompleteTaskUseCase),
+                update_use_case=Mock(spec=UpdateTaskUseCase),
+                delete_use_case=delete_use_case,
+                presenter=presenter,
+            )
+            return controller, delete_use_case, presenter
+
+        def test_削除成功時に削除結果を返す(
+            self, fixture_controller: tuple[TaskController, Mock, Mock]
+        ) -> None:
+            """削除結果を返し、UUIDに変換してユースケースに渡すことを確認する."""
+            controller, delete_use_case, presenter = fixture_controller
+            task_id = "12345678-1234-5678-1234-567812345678"
+            deletion_outcome = DeletionOutcome(UUID(task_id))
+            delete_use_case.execute.return_value = Result.success(deletion_outcome)
+
+            result = controller.handle_delete(task_id)
+
+            assert (
+                result.success,
+                delete_use_case.execute.call_args,
+                presenter.present_error.call_args,
+            ) == (deletion_outcome, call(UUID(task_id)), None)
+
+        def test_ユースケースの失敗を表示モデルに変換する(
+            self, fixture_controller: tuple[TaskController, Mock, Mock]
+        ) -> None:
+            """ユースケースのエラーを表示モデルに変換して返すことを確認する."""
+            controller, delete_use_case, presenter = fixture_controller
+            task_id = "12345678-1234-5678-1234-567812345678"
+            error = Error.not_found("Task", task_id)
+            error_view_model = ErrorViewModel(
+                message=f"id {task_id} の Task が見つかりません",
+                code="NOT_FOUND",
+            )
+            delete_use_case.execute.return_value = Result.failure(error)
+            presenter.present_error.return_value = error_view_model
+
+            result = controller.handle_delete(task_id)
+
+            assert (
+                result.error,
+                delete_use_case.execute.call_args,
+                presenter.present_error.call_args,
+            ) == (
+                error_view_model,
+                call(UUID(task_id)),
+                call(f"id {task_id} の Task が見つかりません", "NOT_FOUND"),
+            )
+
+        def test_uuid形式でないtask_idを検証エラーに変換する(
+            self, fixture_controller: tuple[TaskController, Mock, Mock]
+        ) -> None:
+            """UUID形式でないtask_idを検証エラーとして返すことを確認する."""
+            controller, delete_use_case, presenter = fixture_controller
+            error_view_model = ErrorViewModel(
+                message="badly formed hexadecimal UUID string",
+                code="VALIDATION_ERROR",
+            )
+            presenter.present_error.return_value = error_view_model
+
+            result = controller.handle_delete("invalid-task-id")
+
+            assert (
+                result.error,
+                delete_use_case.execute.call_args,
+                presenter.present_error.call_args,
+            ) == (
+                error_view_model,
+                None,
+                call("badly formed hexadecimal UUID string", "VALIDATION_ERROR"),
             )
